@@ -9,14 +9,21 @@
             [clojure.data.codec.base64 :as base64]
             [clojure.string :as string]
             [clojure.pprint :as pp :refer [pprint]]
-            [me.raynes.fs :as fs]
+            ;;[me.raynes.fs :as fs]
             [clojure.tools.logging :as log]
             [environ.core :refer [env]]
-            [mbroker.rabbitmq :as rmq])
+            [mbroker.rabbitmq :as mq]
+            [langohr.core :as rmq]
+            [langohr.exchange :as le]
+            [langohr.queue :as lq]
+            [langohr.consumers :as lc]
+            [langohr.channel :as lch]
+            [tpn.fromjson :as fromjson]
+            [pamela.tools.q-learning.DMQL :as dmql])
   (:gen-class)) ;; required for uberjar
 
 
-(def cli-options [["-m" "--model pm" "pamela model of system" :default nil]
+(def cli-options [;;["-m" "--model pm" "pamela model of system" :default nil]
                   ["-o" "--output file" "output" :default "spamela.txt"]
                   ["-h" "--host rmqhost" "RMQ Host" :default "localhost"]
                   ["-p" "--port rmqport" "RMQ Port" :default 5672 :parse-fn #(Integer/parseInt %)]
@@ -32,6 +39,8 @@
                   ])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defonce last-ctag nil)
 
 ;;; Commands
 
@@ -95,7 +104,7 @@
           plantid (get m :plant-id)]
       (cond
         ;; Handle commands from the dispatcher to DMCP directly
-        (and (= rk dmcpid))     (condp = command
+        #_(and (= rk dmcpid))     #_(condp = command
                                  :get-field-value (get-field-value m)
                                  ;; :set-field-value (set-field-value m)
                                  (println "Unknown command received: " command m))
@@ -114,10 +123,15 @@
 )
       (check-for-satisfied-activities))))
 
+
+(defn action-function
+  [args]
+  (println args))
+
 (def #^{:added "0.1.0"}
   actions
   "Valid drql command line actions"
-  {"observe" (var observe-plant)})
+  {"q-learner" (var action-function)})
 
 (defn usage
   "Print drql command line help."
@@ -208,4 +222,7 @@
   "drql"
   {:added "0.1.0"}
   [& args]
+  (apply q-learner args)
   nil)
+
+;;; Fin

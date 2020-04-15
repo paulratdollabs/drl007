@@ -1,13 +1,47 @@
+;; Copyright © 2020 Dynamic Object Language Labs Inc.
+;;
+;; This software is licensed under the terms of the
+;; Apache License, Version 2.0 which can be found in
+;; the file LICENSE at the root of this distribution.
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; PAMELA RL Q-Learning
 
+(ns pamela.tools.q-learning.DMQL
+  "Q-Learning"
+  (:require [clojure.string :as string]
+            [clojure.repl :refer [pst]]
+            [clojure.tools.cli :refer [parse-opts]]
+            [clojure.pprint :as pp :refer [pprint]]
+            [clojure.tools.logging :as log]
+            [environ.core :refer [env]]
+            )
+  (:gen-class))
 
+;(in-ns 'pamela.tools.q-learning.DMQL)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PAMELA RL Q-Learning
 
 (defn actionselector
   [list-of-atoms]
-  ...)
+  (deref (first list-of-atoms))) ;+++
+
+(defn reset-state                       ; Invoke the reset +++
+  []
+  nil)
+
+(defn perform                           ; Invoke the action +++
+  [action]
+  nil)
+
+(defn get-discrete-state                ; Discretize the state +++
+  [raw-state]
+  nil)
+
+(defn goal-achieved                     ; Open to decide differently
+  [state done]
+  done)
 
 (defn initialize-learner
   [cycletime learningrate discount epsilon actionselecter initialQ]
@@ -66,19 +100,22 @@
                   current-q (deref q-pos)
                   new-q (+ (* (- 1.0 alpha) current-q) ; Bellman's Equation
                            (* alpha (+ reward (* gamma max-future-q))))]
-              (set! qpos new-q))
+              ;;(set! q-pos new-q)
+              )
 
-            (goal-achieved new-state)
-            (set! (fixed-sized-q-value (fixed-sized-q-value q-table discrete-state) action) (+ ereward reward)))
+            (goal-achieved new-state d)
+            (let [q-pos (fixed-sized-q-value (fixed-sized-q-value q-table discrete-state) action)]
+              ;;(set! q-pos (+ ereward reward))
+              ))
 
           (recur  discrete-state d (+ ereward reward)))
         ))))
 
 (defn train
   [learner episodes]
-  (let [{q-table :q-table)
+  (let [{q-table :q-table
          reset-state :reset-state} learner]
     (dotimes [episode episodes]
-      (run-episode learner (get-discrete-state (reset-state)))))
+      (run-episode learner (get-discrete-state (reset-state))))))
 
 ;;; Fin

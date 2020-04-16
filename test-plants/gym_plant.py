@@ -112,17 +112,17 @@ class Rmq:
         self.num_acts = self.env.action_space.n
         self.num_obs = len(self.obs_high)
 
-        return [self.plant.make_observation('numacts', int(self.num_acts)),
-                self.plant.make_observation('numobs',  int(self.num_obs)),
-                self.plant.make_observation('high0', float(self.obs_high[0]) if self.num_obs>0 else 0),
-                self.plant.make_observation('high1', float(self.obs_high[1]) if self.num_obs>1 else 0),
-                self.plant.make_observation('high2', float(self.obs_high[2]) if self.num_obs>2 else 0),
-                self.plant.make_observation('high3', float(self.obs_high[3]) if self.num_obs>3 else 0),
-                self.plant.make_observation('low0',  float(self.obs_low[0])  if self.num_obs>0 else 0),
-                self.plant.make_observation('low1',  float(self.obs_low[1])  if self.num_obs>1 else 0),
-                self.plant.make_observation('low2',  float(self.obs_low[2])  if self.num_obs>2 else 0),
-                self.plant.make_observation('low3',  float(self.obs_low[3])  if self.num_obs>3 else 0)
-               ]
+        p1=[self.plant.make_observation('numacts', int(self.num_acts)),
+            self.plant.make_observation('numobs',  int(self.num_obs))]
+        p2=[self.plant.make_observation('high0', float(self.obs_high[0]))] if self.num_obs>0 else []
+        p3=[self.plant.make_observation('high1', float(self.obs_high[1]))] if self.num_obs>1 else []
+        p4=[self.plant.make_observation('high2', float(self.obs_high[2]))] if self.num_obs>2 else []
+        p5=[self.plant.make_observation('high3', float(self.obs_high[3]))] if self.num_obs>3 else []
+        p6=[self.plant.make_observation('low0',  float(self.obs_low[0]))]  if self.num_obs>0 else []
+        p7=[self.plant.make_observation('low1',  float(self.obs_low[1]))]  if self.num_obs>1 else []
+        p8=[self.plant.make_observation('low2',  float(self.obs_low[2]))]  if self.num_obs>2 else []
+        p9=[self.plant.make_observation('low3',  float(self.obs_low[3]))]  if self.num_obs>3 else []
+        return p1+p2+p3+p4+p5+p6+p7+p8+p9
 
     def publish_step_obs_rmq(self):
         gym_step_observations = self.make_step_observation()
@@ -130,13 +130,13 @@ class Rmq:
         self.plant.observations(None, gym_step_observations, copy_observations=False, plantid="gym")
 
     def make_step_observation(self):
-        return [self.plant.make_observation('reward',  float(self.gym_reward)),
-                self.plant.make_observation('state0',  float(self.gym_new_state[0]) if self.num_obs>0 else 0),
-                self.plant.make_observation('state1',  float(self.gym_new_state[1]) if self.num_obs>1 else 0),
-                self.plant.make_observation('state2',  float(self.gym_new_state[2]) if self.num_obs>2 else 0),
-                self.plant.make_observation('state3',  float(self.gym_new_state[3]) if self.num_obs>3 else 0),
-                self.plant.make_observation('done',    self.gym_done)
-                ]
+        p1=[self.plant.make_observation('reward',  float(self.gym_reward))]
+        p2=[self.plant.make_observation('state0',  float(self.gym_new_state[0]))] if self.num_obs>0 else []
+        p3=[self.plant.make_observation('state1',  float(self.gym_new_state[1]))] if self.num_obs>1 else []
+        p4=[self.plant.make_observation('state2',  float(self.gym_new_state[2]))] if self.num_obs>2 else []
+        p5=[self.plant.make_observation('state3',  float(self.gym_new_state[3]))] if self.num_obs>3 else []
+        p6=[self.plant.make_observation('done',    self.gym_done)]
+        return p1+p2+p3+p4+p5+p6
 
     def dispatch_func(self, msg, rkey_):
         if 'function-name' in msg:

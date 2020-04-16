@@ -99,8 +99,8 @@
         m (tpn.fromjson/map-from-json-str st)]
     #_(println "Meta")
     #_(clojure.pprint/pprint metadata)
-    #_(println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
-    #_(clojure.pprint/pprint m)
+    (println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
+    (clojure.pprint/pprint m)
     #_(println "raw-data," (System/currentTimeMillis) "," st)
     (let [rk (:routing-key metadata)
           command (keyword (get m :function-name))
@@ -214,72 +214,12 @@
       (def tracefilename trfn)
       (println "RabbitMQ connection Established")
 
-      (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "drml" channel exchange)]
+      ;; This is a test of the interface.  This code doesn't belong here - comment it out.
+      (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
         ((:initialize-world gym-if) gym-if)
         ((:reset gym-if) gym-if)
         ((:perform gym-if) gym-if 0)
         ((:render gym-if) gym-if))
-
-        #_(gym/reset 0 "dmrl" channel exchange)
-        #_(gym/perform 0 "dmrl" channel exchange)
-        #_(gym/render 0 "dmrl" channel exchange)
-
-        #_(mq/publish-object
-           ;; msg
-           {:id "qlearner"
-            :plant-id "gym"
-            :exchange "dmrl"
-            :function-name "make_env"
-            :args [ "MountainCar-v0" ]}
-           ;; routing-key
-           "dmrl"
-           ;; channel
-           channel
-           ;; exchange
-           exchange)
-
-
-        #_(mq/publish-object
-           ;; msg
-           {:id "qlearner"
-            :plant-id "gym"
-            :exchange "dmrl"
-            :function-name "reset"
-            :args []}
-           ;; routing-key
-           "dmrl"
-           ;; channel
-           channel
-           ;; exchange
-           exchange)
-
-        #_(mq/publish-object
-           ;; msg
-           {:id "qlearner"
-            :plant-id "gym"
-            :exchange "dmrl"
-            :function-name "perform-action"
-            :args [ 0 ]}
-           ;; routing-key
-           "dmrl"
-           ;; channel
-           channel
-           ;; exchange
-           exchange)
-
-        #_(mq/publish-object
-           ;; msg
-           {:id "qlearner"
-            :plant-id "gym"
-            :exchange "dmrl"
-            :function-name "render"
-            :args []}
-           ;; routing-key
-           "dmrl"
-           ;; channel
-           channel
-           ;; exchange
-           exchange) ;)
 
         ;; If no model was specified, we assume that a command will provide the model to load  later.
         (when last-ctag

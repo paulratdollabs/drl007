@@ -27,7 +27,7 @@
                   ["-o" "--output file" "output" :default "spamela.txt"]
                   ["-h" "--host rmqhost" "RMQ Host" :default "localhost"]
                   ["-p" "--port rmqport" "RMQ Port" :default 5672 :parse-fn #(Integer/parseInt %)]
-                  ["-e" "--exchange name" "RMQ Exchange Name" :default "tpn-updates"]
+                  ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
                   ["-m" "--model ir" "Model IR" :default nil]
                   ["-r" "--root name" "Root pClass" :default "main"]
                   ["-b" "--drqlid id" "DRQL ID" :default "drql1"]
@@ -38,6 +38,7 @@
                   ["-?" "--help"]
                   ])
 
+;;;plantid: gym, exchange: dmrl, host: localhost, port: 5672
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defonce last-ctag nil)
@@ -86,6 +87,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(def received-count 0)
+
 (defn incoming-msgs [_ metadata ^bytes payload]
   (def received-count (inc received-count))
   (when (zero? (mod received-count 1000))
@@ -128,10 +131,15 @@
   [args]
   (println args))
 
+(defn demo-function
+  [args]
+  nil)
+
 (def #^{:added "0.1.0"}
   actions
   "Valid drql command line actions"
-  {"q-learner" (var action-function)})
+  {"q-learner" (var action-function)
+   "demo" (var demo-function)})
 
 (defn usage
   "Print drql command line help."
@@ -151,7 +159,7 @@
     (string/join \newline)))
 
 (defn q-learner
-  "DOLL Reinforcement Q-Leqrner"
+  "DOLL Reinforcement Q-Learner"
   [& args]
   (println args)
   (println cli-options)
@@ -205,6 +213,64 @@
       (def tracefilename trfn)
       (println "RabbitMQ connection Established")
 
+      (mq/publish-object
+       ;; msg
+       {:id "qlearner"
+        :plant-id "gym"
+        :exchange "dmrl"
+        :function-name "make_env"
+        :args [ "MountainCar-v0" ]}
+       ;; routing-key
+       "dmrl"
+       ;; channel
+       channel
+       ;; exchange
+       exchange)
+
+       ;;(for [action (range 3)]
+       ;;  (do
+      (mq/publish-object
+       ;; msg
+       {:id "qlearner"
+        :plant-id "gym"
+        :exchange "dmrl"
+        :function-name "reset"
+        :args []}
+       ;; routing-key
+       "dmrl"
+       ;; channel
+       channel
+       ;; exchange
+       exchange)
+
+      (mq/publish-object
+       ;; msg
+       {:id "qlearner"
+        :plant-id "gym"
+        :exchange "dmrl"
+        :function-name "perform-action"
+        :args [ 0 ]}
+       ;; routing-key
+       "dmrl"
+       ;; channel
+       channel
+       ;; exchange
+       exchange)
+
+      (mq/publish-object
+       ;; msg
+       {:id "qlearner"
+        :plant-id "gym"
+        :exchange "dmrl"
+        :function-name "render"
+        :args []}
+       ;; routing-key
+       "dmrl"
+       ;; channel
+       channel
+       ;; exchange
+       exchange) ;)
+
       ;; If no model was specified, we assume that a command will provide the model to load  later.
       (when last-ctag
         (mq/cancel-subscription (first last-ctag) (second last-ctag)))
@@ -214,7 +280,8 @@
 
       (if-not (nil? tracefilename)
         (with-open [ostrm (clojure.java.io/writer tracefilename)]
-          (while (not exitmainprogram) (Thread/sleep 1000))))
+          (while (not exitmainprogram)
+            (Thread/sleep 1000))))
 
       ctag)))
 

@@ -91,9 +91,9 @@ class Plant:
 
     def message_receiver_internal(self, channel, method, properties, body):
         msg = to_object(body)
-        # print("Dispatching received plant message method: " + str(method))
-        # print("Dispatching received plant message properties: " + str(properties))
-        # print("Dispatching received plant message body: " + str(msg))
+        #print("Dispatching received plant message method: " + str(method))
+        #print("Dispatching received plant message properties: " + str(properties))
+        #print("Dispatching received plant message body: " + str(msg))
         self.cb_function(msg, method.routing_key)
 
     def close(self):

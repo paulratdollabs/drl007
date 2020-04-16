@@ -19,7 +19,7 @@ try:
 except ImportError as error:
     # Output expected ImportErrors.
     print(error.__class__.__name__ + ": " + error.message)
-    print 'Ensure PYTHONPATH has plant.py'
+    print('Ensure PYTHONPATH has plant.py')
 except Exception as exception:
     # Output unexpected Exceptions.
     print(exception, False)
@@ -66,7 +66,7 @@ class Rmq:
     def make_env(self, msg):
         self.plant.started(msg)
         envname, = msg['args']
-        print 'gym make: ', envname
+        print('gym make: ', envname)
         env=gym.make(envname)
         self.plant.finished(msg)
         print('make_env')
@@ -93,7 +93,7 @@ class Rmq:
         action_name, = msg['args']
         action_number = int(action_name)
         if env.action_space.n >= action_number >= 0:
-            gym_new_state, gym_reward, gym_done, _ env.step(action_number)
+            gym_new_state, gym_reward, gym_done, _ = env.step(action_number)
             publish_step_obs_rmq(self)
         else:
             print('Bad action specified:', action_name)
@@ -113,14 +113,14 @@ class Rmq:
 
         return [self.plant.make_observation('numacts', actions),
                 self.plant.make_observation('numobs',  numobs),
-                self.plant.make_observation('high0',   if numobs>0 obs_high[0] else 0),
-                self.plant.make_observation('high1',   if numobs>1 obs_high[1] else 0),
-                self.plant.make_observation('high2',   if numobs>2 obs_high[2] else 0),
-                self.plant.make_observation('high3',   if numobs>3 obs_high[3] else 0),
-                self.plant.make_observation('low0',    if numobs>0 obs_low[0]  else 0),
-                self.plant.make_observation('low1',    if numobs>1 obs_low[1]  else 0),
-                self.plant.make_observation('low2',    if numobs>2 obs_low[2]  else 0),
-                self.plant.make_observation('low3',    if numobs>3 obs_low[3]  else 0)
+                self.plant.make_observation('high0', obs_high[0] if numobs>0 else 0),
+                self.plant.make_observation('high1', obs_high[1] if numobs>1 else 0),
+                self.plant.make_observation('high2', obs_high[2] if numobs>2 else 0),
+                self.plant.make_observation('high3', obs_high[3] if numobs>3 else 0),
+                self.plant.make_observation('low0',  obs_low[0]  if numobs>0 else 0),
+                self.plant.make_observation('low1',  obs_low[1]  if numobs>1 else 0),
+                self.plant.make_observation('low2',  obs_low[2]  if numobs>2 else 0),
+                self.plant.make_observation('low3',  obs_low[3]  if numobs>3 else 0)
                ]
 
     def publish_step_obs_rmq(self):
@@ -130,12 +130,40 @@ class Rmq:
 
     def make_step_observation(self):
         return [self.plant.make_observation('reward',  gym_reward),
-                self.plant.make_observation('state0',  if numobs>0 gym_new_state[0] else 0),
-                self.plant.make_observation('state1',  if numobs>1 gym_new_state[1] else 0),
-                self.plant.make_observation('state2',  if numobs>2 gym_new_state[2] else 0),
-                self.plant.make_observation('state3',  if numobs>3 gym_new_state[3] else 0),
+                self.plant.make_observation('state0',  gym_new_state[0] if numobs>0 else 0),
+                self.plant.make_observation('state1',  gym_new_state[1] if numobs>1 else 0),
+                self.plant.make_observation('state2',  gym_new_state[2] if numobs>2 else 0),
+                self.plant.make_observation('state3',  gym_new_state[3] if numobs>3 else 0),
                 self.plant.make_observation('done',    gym_done)
                 ]
+
+    def dispatch_func(self, msg, rkey_):
+        if 'function-name' in msg:
+            self.handle_fn(msg)
+        # elif 'observations' in msg:
+        #     self.handle_observation(msg)
+        # elif 'state' in msg:
+        #     st = msg['state']
+        # noop
+        else:
+            print('unhandled message')
+            pprint(msg)
+
+    def handle_fn(self, msg):
+        # print 'Got message routing key', routing_key
+        # print 'handle rmq message:', utils.get_current_thread_name()
+        fn_name = msg['function-name']
+        if fn_name == 'make_env':
+            self.make_env(msg)
+        elif fn_name == 'reset':
+            self.reset(msg)
+        elif fn_name == 'render':
+            self.render(msg)
+        elif fn_name == 'perform-action':
+            self.perform_action(msg)
+        else:
+            print('RMQ Unknown function', msg['function-name'])
+            self.plant.failed(msg, "Unknown function for cps ros plant" + msg['function-name'])
 
     def subscribe_and_wait(self):
         self.plant.wait_for_messages(self.dispatch_func)
@@ -157,6 +185,7 @@ def on_gym_shutdown():
 def main(args):
     global rmq
 
+    print("plantid=", args.plantid, "exchange=", args.exchange, "host=", args.host, "port=", args.port)
     rmq = Rmq(args.plantid, args.exchange, args.host, args.port)
 
     try:
@@ -170,7 +199,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Gym Plant')
     parser.add_argument('--host', default='192.168.11.100', help='RMQ host')
     parser.add_argument('-p', '--port', default=5672, help='RMQ Port', type=int)
-    parser.add_argument('-e', '--exchange', default='adam', help='RMQ Exchange')
+    parser.add_argument('-e', '--exchange', default='dmrl', help='RMQ Exchange')
     parser.add_argument('--plantid', default="gym", help='default plant id')
 
     args = parser.parse_args()

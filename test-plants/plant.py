@@ -55,12 +55,12 @@ class Plant:
         self.connection.add_callback_threadsafe(self.rmq_is_idle)
         self.channel_thread = threading.current_thread()
         self.channel.exchange_declare(exchange=exchange, exchange_type='topic')
-        self.queue = self.channel.queue_declare(exclusive=True)
+        self.queue = self.channel.queue_declare('', exclusive=True)
         self.qname = self.queue.method.queue
         self.done = False
         if plantid is not None:
             self.channel.queue_bind(queue=self.qname, exchange=exchange, routing_key=plantid)
-        print 'Plant instance created by thread:', self.channel_thread.getName()
+        print('Plant instance created by thread:', self.channel_thread.getName())
 
     def myprint(self):
         print("plantid: " + str(self.plantid) + ", exchange: " + str(self.exchange) +
@@ -75,8 +75,7 @@ class Plant:
         print("Waiting for commands")
         # Tell the broker that we won't be providing explicit acks for messages received.
         self.cb_function = cb_fn_name
-        self.channel.basic_consume(self.message_receiver_internal, queue=self.qname,
-                                   no_ack=True)
+        self.channel.basic_consume(self.qname, self.message_receiver_internal, auto_ack=False) #Before, no_ack=True
         self.wait_until_keyboard_interrupt()
 
     def wait_until_keyboard_interrupt(self):
@@ -87,8 +86,8 @@ class Plant:
         except pika.exceptions.ConnectionClosed:
             print('Received pika.exceptions.ConnectionClosed')
         # except Exception as e:
-        #     print 'plant.py wait_until_keyboard_interrupt \nThis happens when closing RMQ connections\n',e.__class__.__name__ + ": " + e.message
-        # print 'plant.py done '
+        #     print( 'plant.py wait_until_keyboard_interrupt \nThis happens when closing RMQ connections\n',e.__class__.__name__ + ": " + e.message)
+        # print( 'plant.py done ')
 
     def message_receiver_internal(self, channel, method, properties, body):
         msg = to_object(body)
@@ -100,7 +99,7 @@ class Plant:
     def close(self):
         print("closing rmq connection")
         while self.to_rmq:
-            print 'plant closing, process pending messages', len(self.to_rmq)
+            print( 'plant closing, process pending messages', len(self.to_rmq))
             self.process_to_rmq()
 
         self.channel.close()
@@ -161,7 +160,7 @@ class Plant:
     def observations(self, orig_msg, obs_vec, timestamp=get_time_millis(), copy_observations=True, plantid = None):
         obs_vec_copy = obs_vec
         if copy_observations is True:
-            print 'Make a copy of observations'
+            print( 'Make a copy of observations')
             obs_vec_copy = []
             for obs in obs_vec:
                 obs_copy = obs.copy()
@@ -185,17 +184,17 @@ class Plant:
         self.__enque_to_rmq(self.exchange, self.routing_key, json.dumps(msg))
 
     def binary_publish(self, routing_key, data):
-        # print 'publishing data of len {}'.format(len(data))
+        # print( 'publishing data of len {}'.format(len(data)))
         properties = pika.BasicProperties(content_type='application/x-binary')
         self.__enque_to_rmq(self.exchange, routing_key, data, properties)
-        # print '---- done my generic_publish\n'
+        # print( '---- done my generic_publish\n')
 
     def process_to_rmq(self):
         n_waiting = len(self.to_rmq)
 
         if n_waiting > 0:
             for i in range(n_waiting):
-                # print 'plant.rmq_is_idle is sending ', n_waiting
+                # print( 'plant.rmq_is_idle is sending ', n_waiting)
                 msg = self.to_rmq.popleft()
                 self.__basic_publish(msg['exchange'], msg['routing-key'], msg['data'], msg['properties'])
 
@@ -213,9 +212,9 @@ class Plant:
         th = threading.current_thread()
 
         if th.ident != self.channel_thread.ident or th.getName() != self.channel_thread.getName():
-            print 'WARN: ', 'discrepancy in plant create thread and outgoing thread sending the outgoing message'
-            print 'current thread', th.ident, th.getName()
-            print 'channel thread', self.channel_thread.ident, self.channel_thread.getName()
+            print( 'WARN: ', 'discrepancy in plant create thread and outgoing thread sending the outgoing message')
+            print( 'current thread', th.ident, th.getName())
+            print( 'channel thread', self.channel_thread.ident, self.channel_thread.getName())
 
         if properties is None:
             self.channel.basic_publish(exchange, routing_key, data)

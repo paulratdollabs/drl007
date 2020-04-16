@@ -218,82 +218,82 @@
         ((:initialize-world gym-if) gym-if)
         ((:reset gym-if) gym-if)
         ((:perform gym-if) gym-if 0)
-        ((:render gym-if) gym-if)
+        ((:render gym-if) gym-if))
 
-      #_(gym/reset 0 "dmrl" channel exchange)
-      #_(gym/perform 0 "dmrl" channel exchange)
-      #_(gym/render 0 "dmrl" channel exchange)
+        #_(gym/reset 0 "dmrl" channel exchange)
+        #_(gym/perform 0 "dmrl" channel exchange)
+        #_(gym/render 0 "dmrl" channel exchange)
 
-      #_(mq/publish-object
-       ;; msg
-       {:id "qlearner"
-        :plant-id "gym"
-        :exchange "dmrl"
-        :function-name "make_env"
-        :args [ "MountainCar-v0" ]}
-       ;; routing-key
-       "dmrl"
-       ;; channel
-       channel
-       ;; exchange
-       exchange)
+        #_(mq/publish-object
+           ;; msg
+           {:id "qlearner"
+            :plant-id "gym"
+            :exchange "dmrl"
+            :function-name "make_env"
+            :args [ "MountainCar-v0" ]}
+           ;; routing-key
+           "dmrl"
+           ;; channel
+           channel
+           ;; exchange
+           exchange)
 
 
-      #_(mq/publish-object
-       ;; msg
-       {:id "qlearner"
-        :plant-id "gym"
-        :exchange "dmrl"
-        :function-name "reset"
-        :args []}
-       ;; routing-key
-       "dmrl"
-       ;; channel
-       channel
-       ;; exchange
-       exchange)
+        #_(mq/publish-object
+           ;; msg
+           {:id "qlearner"
+            :plant-id "gym"
+            :exchange "dmrl"
+            :function-name "reset"
+            :args []}
+           ;; routing-key
+           "dmrl"
+           ;; channel
+           channel
+           ;; exchange
+           exchange)
 
-      #_(mq/publish-object
-       ;; msg
-       {:id "qlearner"
-        :plant-id "gym"
-        :exchange "dmrl"
-        :function-name "perform-action"
-        :args [ 0 ]}
-       ;; routing-key
-       "dmrl"
-       ;; channel
-       channel
-       ;; exchange
-       exchange)
+        #_(mq/publish-object
+           ;; msg
+           {:id "qlearner"
+            :plant-id "gym"
+            :exchange "dmrl"
+            :function-name "perform-action"
+            :args [ 0 ]}
+           ;; routing-key
+           "dmrl"
+           ;; channel
+           channel
+           ;; exchange
+           exchange)
 
-      #_(mq/publish-object
-       ;; msg
-       {:id "qlearner"
-        :plant-id "gym"
-        :exchange "dmrl"
-        :function-name "render"
-        :args []}
-       ;; routing-key
-       "dmrl"
-       ;; channel
-       channel
-       ;; exchange
-       exchange) ;)
+        #_(mq/publish-object
+           ;; msg
+           {:id "qlearner"
+            :plant-id "gym"
+            :exchange "dmrl"
+            :function-name "render"
+            :args []}
+           ;; routing-key
+           "dmrl"
+           ;; channel
+           channel
+           ;; exchange
+           exchange) ;)
 
-      ;; If no model was specified, we assume that a command will provide the model to load  later.
-      (when last-ctag
-        (mq/cancel-subscription (first last-ctag) (second last-ctag)))
-      ;; conj for list pushes to the front, so we push channel then ctag.
-      ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
-      (def last-ctag (conj last-ctag channel ctag))
+        ;; If no model was specified, we assume that a command will provide the model to load  later.
+        (when last-ctag
+          (mq/cancel-subscription (first last-ctag) (second last-ctag)))
+        ;; conj for list pushes to the front, so we push channel then ctag.
+        ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
+        (def last-ctag (conj last-ctag channel ctag))
 
-      (if-not (nil? tracefilename)
-        (with-open [ostrm (clojure.java.io/writer tracefilename)]
-          (while (not exitmainprogram)
-            (Thread/sleep 1000))))
+        (if-not (nil? tracefilename)
+          (with-open [ostrm (clojure.java.io/writer tracefilename)]
+            (while (not exitmainprogram)
+              (Thread/sleep 1000))))
 
-      ctag)))
+        ctag)))
 
 (defn  -main
   "drql"

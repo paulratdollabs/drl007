@@ -29,7 +29,7 @@
 
 ;;; DOLL Plant Learning Interface
 
-(defrecord dlpinterface [;; World-specific parameters
+(defrecord dplinterface [;; World-specific parameters
                           world-parameters ; a list of arguments
                           ;; RabbitMQ information
                           routing channel exchange
@@ -40,8 +40,8 @@
                           ;; Functions that return values
                           get-discrete-state goal-achieved])
 
-(defn make-dlp-interface
+(defn make-dpl-interface
   [a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11]
-  (dlpinterface. a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11))
+  (dplinterface. a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11))
 
 ;;; Fin

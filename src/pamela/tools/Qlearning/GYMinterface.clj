@@ -22,7 +22,7 @@
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
-            [pamela.tools.Qlearning.DPLinterface :as dlp]
+            [pamela.tools.Qlearning.DPLinterface :as dpl]
             )
   ;; ??? Why don't these two ways of accessing the record work ???
   ;; (:use [pamela.tools.Qlearning.DPL-interface])
@@ -92,7 +92,7 @@
 
 (defn make-gym-interface
   [world-name routing channel exchange]
-  (let [interface (dlp/make-dpl-interface
+  (let [interface (dpl/make-dpl-interface
                    ;; :world-parameters
                    (list world-name)
 
@@ -106,7 +106,7 @@
                    exchange
 
                    ;; :initialize-world
-                   (fn [self] (initialize-simulator (first (:world-parameters self) (:routing self) (:channel self) (:exchange self))))
+                   (fn [self] (initialize-simulator (first (:world-parameters self)) (:routing self) (:channel self) (:exchange self)))
 
                    ;; :shutdown
                    (fn [self] (shutdown (:routing self) (:channel self) (:exchange self)))

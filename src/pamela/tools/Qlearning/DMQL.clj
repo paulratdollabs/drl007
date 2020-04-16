@@ -7,7 +7,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PAMELA RL Q-Learning
 
-(ns pamela.tools.q-learning.DMQL
+(ns pamela.tools.Qlearning.DMQL
   "Q-Learning"
   (:require [clojure.string :as string]
             [clojure.repl :refer [pst]]
@@ -15,10 +15,10 @@
             [clojure.pprint :as pp :refer [pprint]]
             [clojure.tools.logging :as log]
             [environ.core :refer [env]]
-            )
+            [pamela.tools.Qlearning.gym-interface :as gym])
   (:gen-class))
 
-;(in-ns 'pamela.tools.q-learning.DMQL)
+;(in-ns 'pamela.tools.Qlearning.DMQL)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PAMELA RL Q-Learning

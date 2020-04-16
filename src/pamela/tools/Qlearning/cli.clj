@@ -2,7 +2,7 @@
 ;; DISTRIBUTION STATEMENT C: U.S. Government agencies and their contractors.
 ;; Other requests shall be referred to DARPA’s Public Release Center via email at prc@darpa.mil.
 
-(ns pamela.tools.q-learning.cli
+(ns pamela.tools.Qlearning.cli
   "Q-Learning."
   (:require [clojure.tools.cli :as cli :refer [parse-opts]]
             [clojure.data.json :as json]
@@ -19,7 +19,8 @@
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
-            [pamela.tools.q-learning.DMQL :as dmql])
+            [pamela.tools.Qlearning.DMQL :as dmql]
+            [pamela.tools.Qlearning.GYMinterface :as gym])
   (:gen-class)) ;; required for uberjar
 
 
@@ -213,7 +214,17 @@
       (def tracefilename trfn)
       (println "RabbitMQ connection Established")
 
-      (mq/publish-object
+      (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "drml" channel exchange)]
+        ((:initialize-world gym-if) gym-if)
+        ((:reset gym-if) gym-if)
+        ((:perform gym-if) gym-if 0)
+        ((:render gym-if) gym-if)
+
+      #_(gym/reset 0 "dmrl" channel exchange)
+      #_(gym/perform 0 "dmrl" channel exchange)
+      #_(gym/render 0 "dmrl" channel exchange)
+
+      #_(mq/publish-object
        ;; msg
        {:id "qlearner"
         :plant-id "gym"
@@ -227,9 +238,8 @@
        ;; exchange
        exchange)
 
-       ;;(for [action (range 3)]
-       ;;  (do
-      (mq/publish-object
+
+      #_(mq/publish-object
        ;; msg
        {:id "qlearner"
         :plant-id "gym"
@@ -243,7 +253,7 @@
        ;; exchange
        exchange)
 
-      (mq/publish-object
+      #_(mq/publish-object
        ;; msg
        {:id "qlearner"
         :plant-id "gym"
@@ -257,7 +267,7 @@
        ;; exchange
        exchange)
 
-      (mq/publish-object
+      #_(mq/publish-object
        ;; msg
        {:id "qlearner"
         :plant-id "gym"

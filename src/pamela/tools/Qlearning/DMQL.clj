@@ -15,7 +15,7 @@
             [clojure.pprint :as pp :refer [pprint]]
             [clojure.tools.logging :as log]
             [environ.core :refer [env]]
-            [pamela.tools.Qlearning.gym-interface :as gym])
+            [pamela.tools.Qlearning.GYMinterface :as gym])
   (:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)

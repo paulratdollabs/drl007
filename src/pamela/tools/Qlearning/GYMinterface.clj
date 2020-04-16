@@ -29,7 +29,7 @@
   ;; (:import [pamela.tools.Qlearning.DPL-interface dlpinterface])
   (:gen-class))
 
-;(in-ns 'pamela.tools.Qlearning.gym-interface)
+;(in-ns 'pamela.tools.Qlearning.GYMinterface)
 
 (defn actionselector
   [list-of-atoms]

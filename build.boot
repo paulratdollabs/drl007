@@ -8,7 +8,7 @@
 (def version "0.2.0")
 (def description "DOLL Monte-Carlo Reinforcement Learner")
 (def project-url "https://TBD/dollabs/")
-(def main 'pamela.tools.q-learning.cli)
+(def main 'pamela.tools.Qlearning.cli)
 
 (set-env!
   :source-paths #{"src"}

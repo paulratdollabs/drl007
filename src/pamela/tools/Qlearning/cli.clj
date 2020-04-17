@@ -231,19 +231,28 @@
 
       (println "RabbitMQ connection Established, plantifid=" plantifid)
 
-      ;; This is a test of the interface.  This code doesn't belong here - comment it out.
-      (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
-        ((:initialize-world gym-if) gym-if)
-        ((:reset gym-if) gym-if)
-        ((:perform gym-if) gym-if 0)
-        ((:render gym-if) gym-if))
+      (cond (>= (count args) 1)
+            (doseq [arg args]
+              (case (keyword arg)
+                :test-connection
+                (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
+                  ((:initialize-world gym-if) gym-if)
+                  ((:reset gym-if) gym-if)
+                  ((:perform gym-if) gym-if 0)
+                  ((:render gym-if) gym-if))
 
-      ;; Start the learner!
-      (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
+                :qlearn
+                ;; Start the learner!
+                (let [_ (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
+                      learner (dmql/initialize-learner cycl alph disc expl nil #_initialQ)] ;+++ provide an initial Q
+                  (dmql/train learner neps (gym/make-gym-interface gwld "dmrl" channel exchange))
+                  (println "Training completed."))
 
-      (let [learner (dmql/initialize-learner cycl alph disc expl nil #_initialQ)] ;+++ provide an initial Q
-        (dmql/train learner neps (gym/make-gym-interface gwld "dmrl" channel exchange)))
+                (println "Unknown command: " arg "try: test-connection or qlearn")))
 
+            :else
+            (println "No command specified, try test-connection or qlearn"))
+      (System/exit 0)
       ;; If no model was specified, we assume that a command will provide the model to load  later.
       (when last-ctag
         (mq/cancel-subscription (first last-ctag) (second last-ctag)))
@@ -255,7 +264,6 @@
         (with-open [ostrm (clojure.java.io/writer tracefilename)]
           (while (not exitmainprogram)
             (Thread/sleep 1000))))
-
       ctag)))
 
 (defn  -main

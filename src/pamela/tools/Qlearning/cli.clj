@@ -31,7 +31,7 @@
                   ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
                   ["-m" "--model ir" "Model IR" :default nil]
                   ["-r" "--root name" "Root pClass" :default "main"]
-                  ["-b" "--drqlid id" "DRQL ID" :default "drql1"]
+                  ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
                   ["-t" "--tracefile file" " Trace filename" :default nil]
                   ["-f" "--fromfile val" "Observations from file" :default 0]
@@ -50,6 +50,7 @@
 (def exchange nil)
 (def dmcpid nil)
 (def watchedplant nil)
+(def plantifid nil)
 (def running-activities nil)
 (def timeoutmilliseconds 20000) ; 30 second timeout
 (def tracefilename nil)
@@ -99,8 +100,8 @@
         m (tpn.fromjson/map-from-json-str st)]
     #_(println "Meta")
     #_(clojure.pprint/pprint metadata)
-    (println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
-    (clojure.pprint/pprint m)
+    #_(println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
+    #_(clojure.pprint/pprint m)
     #_(println "raw-data," (System/currentTimeMillis) "," st)
     (let [rk (:routing-key metadata)
           command (keyword (get m :function-name))
@@ -113,17 +114,18 @@
                                  ;; :set-field-value (set-field-value m)
                                  (println "Unknown command received: " command m))
 
-        ;; Handle observations from everywhere
-        (= rk "observations")    (if (= plantid :plant) ;+++ we need a plant id to be unique to the camera +++
-                                   nil ;; +++(recobs/process-visual-observation m)
+        ;; Handle observations from plant
+        (= rk "observations")    (if (= plantid plantifid)
                                    (doseq [anobs observations]
                                      (let [field (get anobs :field)
                                            value (get anobs :value)]
-                                       (cond (and field value)
-                                             nil ;; do something here***+++(rtm/set-field-value! plantid field value)
+                                       (cond  field
+                                              (do #_(println "Received " field "=" value)
+                                                  (gym/updatefieldvalue field value))
                                              :else
                                              (do
                                                (println "Received observation: " anobs))))))
+        ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" observations)
 )
       (check-for-satisfied-activities))))
 
@@ -176,7 +178,7 @@
         host (get-in parsed [:options :host])
         _ (if (> verbosity 0) (println ["host = " host]))
         exch (get-in parsed [:options :exchange])
-        myid (get-in parsed [:options :drqlid])
+        ifid (get-in parsed [:options :if])
         wpid (get-in parsed [:options :watchedplant])
         trfn (get-in parsed [:options :tracefile])
         frfi (get-in parsed [:options :fromfile])
@@ -199,6 +201,11 @@
         _ (if (> verbosity 0) (println "DOLL Reinforcement Q-Learner" (:options parsed)))
         ]
 
+    (def exchange exch)
+    (def plantifid (keyword ifid))
+    (def watchedplant wpid)
+    (def tracefilename trfn)
+
     (let [connection (rmq/connect {:host host :port port})
           channel (lch/open connection)
           _ (le/declare channel ch-name "topic")
@@ -208,11 +215,7 @@
           ctag (lc/subscribe channel qname incoming-msgs {:auto-ack true})]
 
       (def rmq-channel channel)
-      (def exchange exch)
-      (def dmcpid myid)
-      (def watchedplant wpid)
-      (def tracefilename trfn)
-      (println "RabbitMQ connection Established")
+      (println "RabbitMQ connection Established, plantifid=" plantifid)
 
       ;; This is a test of the interface.  This code doesn't belong here - comment it out.
       (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]

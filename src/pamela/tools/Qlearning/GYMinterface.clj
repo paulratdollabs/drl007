@@ -22,15 +22,30 @@
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
-            ;;[
-             pamela.tools.Qlearning.DPLinterface  ; :as dpl]
-            )
-  ;; ??? Why don't these two ways of accessing the record work ???
-  ;; (:use [pamela.tools.Qlearning.DPLinterface])
+             pamela.tools.Qlearning.DPLinterface)
   (:import [pamela.tools.Qlearning.DPLinterface dplinterface])
   (:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.GYMinterface)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Plant values
+
+(def ^:dynamic *fields* {})
+(def ^:dynamic *debug-fields* false)
+
+(defn get-field-value
+  [field]
+  (let [value (get *fields* field)]
+    (and value (deref value))))
+
+(defn updatefieldvalue
+  [field value]
+  (let [known-field (get *fields* field)]
+    (if known-field
+      (reset! known-field value)
+      (def ^:dynamic *fields* (merge *fields* {field (atom value)}))))
+  (if *debug-fields* (println "***Set field " field "=" (get *fields* field))))
 
 (defn actionselector
   [list-of-atoms]

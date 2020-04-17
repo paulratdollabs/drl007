@@ -23,19 +23,30 @@
             [pamela.tools.Qlearning.GYMinterface :as gym])
   (:gen-class)) ;; required for uberjar
 
-
 (def cli-options [;;["-m" "--model pm" "pamela model of system" :default nil]
+                  ;; Pamela related options (Which is not yet hooked in)
                   ["-o" "--output file" "output" :default "spamela.txt"]
+                  ["-m" "--model ir" "Model IR" :default nil]
+                  ["-r" "--root name" "Root pClass" :default "main"]
+                  ;; RabbitMQ related options
                   ["-h" "--host rmqhost" "RMQ Host" :default "localhost"]
                   ["-p" "--port rmqport" "RMQ Port" :default 5672 :parse-fn #(Integer/parseInt %)]
                   ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
-                  ["-m" "--model ir" "Model IR" :default nil]
-                  ["-r" "--root name" "Root pClass" :default "main"]
+                  ;; These are learning related options - with reasonable defaults
                   ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
+                  ["-n" "--episodes n" "Number of Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
+                  ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
+                  ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
+                  ["-x" "--explore f" "Portion of episodes to explore" :default 0.5 :parse-fn #(Float/parseFloat %)]
+                  ["-c" "--cycletime ms" "Cycle time in milliseconds" :default 200 :parse-fn #(Integer/parseInt %)]
+
+                  ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
+                  ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
                   ["-t" "--tracefile file" " Trace filename" :default nil]
                   ["-f" "--fromfile val" "Observations from file" :default 0]
                   ["-v" "--verbose level" "Verbose mode" :default "0"]
+                  ;; Help
                   ["-?" "--help"]
                   ])
 
@@ -164,21 +175,25 @@
 (defn q-learner
   "DOLL Reinforcement Q-Learner"
   [& args]
-  (println args)
-  (println cli-options)
+  ;;(println args)
+  ;;(println cli-options)
   (let [parsed (cli/parse-opts args cli-options)
         verbosity (read-string (get-in parsed [:options :verbose]))
         _ (if (> verbosity 1) (println parsed))
         model (get-in parsed [:options :model])
-        desired (get-in parsed [:options :desired])
         outfile (get-in parsed [:options :output])
 
         ch-name (get-in parsed [:options :exchange])
-        _ (if (> verbosity 0) (println [ "ch-name = " ch-name]))
         host (get-in parsed [:options :host])
         _ (if (> verbosity 0) (println ["host = " host]))
         exch (get-in parsed [:options :exchange])
-        ifid (get-in parsed [:options :if])
+        ifid (get-in parsed [:options :if])       ; Interface ID
+        neps (get-in parsed [:options :episodes]) ; Number of episodes
+        alph (get-in parsed [:options :alpha])    ; Learning rate
+        disc (get-in parsed [:options :discount]) ; Discount rate
+        expl (get-in parsed [:options :explore])  ; fraction of episodes for which exploration takes place
+        cycl (get-in parsed [:options :cycletime]); Cycletime in milliseconds
+        gwld (get-in parsed [:options :gymworld]) ; Name of the GYM world to instantiate
         wpid (get-in parsed [:options :watchedplant])
         trfn (get-in parsed [:options :tracefile])
         frfi (get-in parsed [:options :fromfile])
@@ -187,10 +202,8 @@
         help (get-in parsed [:options :help])
         _ (if (> verbosity 0) (println ["help = " help]))
         root (symbol (get-in parsed [:options :root]))
-        _ (println ["root = " root])
-        ;; importfilestem (if desired (strip-extn model) nil) ; not clear that we need that.
-        ;; model (get-in parsed [:options :model])
-        _ (if (> verbosity 0) (println ["model = " model]))
+        ;;_ (if root (println ["root = " root]))
+        _ (if (and model (> verbosity 0)) (println ["model = " model]))
         _ (do
             (def repl false)
             (when help
@@ -215,6 +228,7 @@
           ctag (lc/subscribe channel qname incoming-msgs {:auto-ack true})]
 
       (def rmq-channel channel)
+
       (println "RabbitMQ connection Established, plantifid=" plantifid)
 
       ;; This is a test of the interface.  This code doesn't belong here - comment it out.
@@ -224,19 +238,25 @@
         ((:perform gym-if) gym-if 0)
         ((:render gym-if) gym-if))
 
-        ;; If no model was specified, we assume that a command will provide the model to load  later.
-        (when last-ctag
-          (mq/cancel-subscription (first last-ctag) (second last-ctag)))
-        ;; conj for list pushes to the front, so we push channel then ctag.
-        ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
-        (def last-ctag (conj last-ctag channel ctag))
+      ;; Start the learner!
+      (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
 
-        (if-not (nil? tracefilename)
-          (with-open [ostrm (clojure.java.io/writer tracefilename)]
-            (while (not exitmainprogram)
-              (Thread/sleep 1000))))
+      (let [learner (dmql/initialize-learner cycl alph disc expl nil #_initialQ)] ;+++ provide an initial Q
+        (dmql/train learner neps (gym/make-gym-interface gwld "dmrl" channel exchange)))
 
-        ctag)))
+      ;; If no model was specified, we assume that a command will provide the model to load  later.
+      (when last-ctag
+        (mq/cancel-subscription (first last-ctag) (second last-ctag)))
+      ;; conj for list pushes to the front, so we push channel then ctag.
+      ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
+      (def last-ctag (conj last-ctag channel ctag))
+
+      (if-not (nil? tracefilename)
+        (with-open [ostrm (clojure.java.io/writer tracefilename)]
+          (while (not exitmainprogram)
+            (Thread/sleep 1000))))
+
+      ctag)))
 
 (defn  -main
   "drql"

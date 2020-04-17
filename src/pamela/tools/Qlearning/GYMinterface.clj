@@ -105,42 +105,28 @@
   [state done]
   done)
 
-
 (defn make-gym-interface
   [world-name routing channel exchange]
-  (let [interface (dplinterface. ; dpl/make-dpl-interface
-                   ;; :world-parameters
-                   world-name
-
-                   ;; :routing
-                   routing
-
-                   ;; :channel
-                   channel
-
-                   ;; :exchange
-                   exchange
-
-                   ;; :initialize-world
-                   (fn [self] (initialize-simulator (first (:world-parameters self)) (:routing self) (:channel self) (:exchange self)))
-
-                   ;; :shutdown
-                   (fn [self] (shutdown (:routing self) (:channel self) (:exchange self)))
-
-                   ;; :perform
-                   (fn [self action] (perform action (:routing self) (:channel self) (:exchange self)))
-
-                   ;; :reset
-                   (fn [self] (reset (:routing self) (:channel self) (:exchange self)))
-
-                   ;; :render
-                   (fn [self] (render (:routing self) (:channel self) (:exchange self)))
-
-                   ;; :get-discrete-state
-                   (fn [self state] (get-discrete-state state))
-
-                   ;; :goal-achieved
-                   (fn [self state] (get-discrete-state state)))]
+  (let [interface (dplinterface.        ; dpl/make-dpl-interface
+                   world-name           ; :world-parameters
+                   routing              ; :routing
+                   channel              ; :channel
+                   exchange             ; :exchange
+                   (fn [self]           ; :initialize-world
+                     (initialize-simulator
+                      (first (:world-parameters self)) (:routing self) (:channel self) (:exchange self)))
+                   (fn [self]           ; :shutdown
+                     (shutdown (:routing self) (:channel self) (:exchange self)))
+                   (fn [self action]    ; :perform
+                     (perform action (:routing self) (:channel self) (:exchange self)))
+                   (fn [self]           ; :reset
+                     (reset (:routing self) (:channel self) (:exchange self)))
+                   (fn [self]           ; :render
+                     (render (:routing self) (:channel self) (:exchange self)))
+                   (fn [self state]     ; :get-discrete-state
+                     (get-discrete-state state))
+                   (fn [self state]     ; :goal-achieved
+                     (get-discrete-state state)))]
     interface))
 
 ;;; Fin

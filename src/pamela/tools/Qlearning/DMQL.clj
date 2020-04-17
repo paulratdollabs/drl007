@@ -44,15 +44,22 @@
   done)
 
 (defn initialize-learner
-  [cycletime learningrate discount epsilon actionselecter initialQ]
+  [cycletime learningrate discount epsilon initialQ]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
    :alpha learningrate                  ; 0 lt learningrate lt 1
    :gamma discount                      ; 0 lt discount lt 1
    :epsilon 1                           ;
-   :actionselectfunction actionselector ; function that selects an action.
-   :reset-state reset-state             ; function returns starting discrete-state
+   :actionselectfunction gym/actionselector ; function that selects an action.
+   :reset-state gym/reset-state             ; function returns starting discrete-state
+   :perform gym/perform
+   :reset gym/reset
+   :initialize-plant gym/initialize-simulator
+   :render gym/render
+   :shutdown gym/shutdown
+   :discretize-state gym/get-discrete-state
+   :goal-achieved gym/goal-achieved
    })
 
 ;;;
@@ -112,10 +119,10 @@
         ))))
 
 (defn train
-  [learner episodes]
+  [learner episodes gym-if]
   (let [{q-table :q-table
          reset-state :reset-state} learner]
-    (dotimes [episode episodes]
+    nil #_(dotimes [episode episodes]
       (run-episode learner (get-discrete-state (reset-state))))))
 
 ;;; Fin

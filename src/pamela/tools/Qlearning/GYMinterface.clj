@@ -131,7 +131,7 @@
 
 (defn goal-achieved                     ; Open to decide differently
   [state done]
-  done)
+  (> (first state) (get-field-value :goal_position)))
 
 (defn make-gym-interface
   [world-name routing channel exchange]

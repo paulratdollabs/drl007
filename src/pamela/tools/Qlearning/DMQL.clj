@@ -30,13 +30,13 @@
    :cycletime cycletime                 ; cycle time in milliseconds
    :alpha learningrate                  ; 0 lt learningrate lt 1
    :gamma discount                      ; 0 lt discount lt 1
-   :epsilon 1
+   :epsilon epsilon                     ; Starting point for explore
    :episodes episodes                   ; number of episodes
    :explore explore
-   :platform platform
    :discretization ssdi
    :numobs numobs
    :numacts numacts
+   :platform platform
    ;;; below moved to DPL interface
    ;;:reset-state gym/reset-state             ; function returns starting discrete-state
    ;;:perform gym/perform
@@ -51,11 +51,13 @@
    })
 
 (defn actionselector
-  [list-of-atoms]
+  [list-of-atoms numacts eps]
   ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
-  (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
-    ;; (println "Best of" list-of-atoms "is " best)
-    (.indexOf list-of-atoms best)))
+  (if (> (rand) eps)
+    (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
+      ;; (println "Best of" list-of-atoms "is " best)
+      (.indexOf list-of-atoms best))
+    (int (* (rand) numacts))))
 
 ;;;
 (defn make-fixed-sized-q-table-uniform-random
@@ -78,7 +80,7 @@
 
 (defn max-atom
   [list-of-atoms]
-  (println "max-atom called with " list-of-atoms)
+  ;;(println "max-atom called with " list-of-atoms)
   (apply max (map deref list-of-atoms)))
 
 (defn win-size
@@ -87,16 +89,18 @@
 
 (defn get-discrete-state
   [state obslow disc-os-win-size]
-  (println "state=" state "low=" obslow "win=" disc-os-win-size)
+  ;; (println "state=" state "low=" obslow "win=" disc-os-win-size)
   (let [discstate (vec
                    (doall
                     (map (fn [state low winsize] (int (/ (- state low) winsize)))
                          state obslow disc-os-win-size)))]
-    (println "discstate=" discstate)
+    ;; (println "discstate=" discstate)
     discstate))
 
+(def successes 0)
+
 (defn run-episode
-  [learner episode]
+  [learner episode epsilon]
   (let [{;; Pull out all of the pieces aheadof the loop
          qt :q-table
          cycletime :cycletime
@@ -116,11 +120,12 @@
     (loop [state discstate
            donep false
            ereward 0
+           prevreward 0
            step 1]
-      (println "state = " discstate)
+      ;; (println "state = " discstate)
       (if (not donep)
         (let [;; Select a action
-              action (actionselector (apply fixed-sized-q-value q-table state))
+              action (actionselector (apply fixed-sized-q-value q-table state) numacts epsilon)
               ;; Perform action
               _ ((:perform platform) platform action)
               _ (Thread/sleep 10) ; was cycletime
@@ -128,8 +133,8 @@
               reward ((:get-field-value platform) platform :reward)
               episode-done ((:get-field-value platform) platform :done)
               discrete-state (get-discrete-state  new-state obslow disc-os-win-size)]
-          (if (= 0 (mod episode 1000)) ((:render platform) platform))
-          (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" discrete-state)
+          (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
+          ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" discrete-state)
           (cond
             (not episode-done)
             (let [max-future-q (max-atom (apply fixed-sized-q-value q-table discrete-state))
@@ -143,20 +148,46 @@
             ((:goal-achieved platform) platform new-state episode-done)
             (let [q-pos (fixed-sized-q-value (apply fixed-sized-q-value q-table discrete-state) action)]
               (reset! q-pos (+ ereward reward))
+              (def successes (+ 1 successes))
+              (println "*** Success #" successes "on step" step "in" episode "episodes ***")
               ))
           ;;(Thread/sleep 1000) ;; Slow it down for debugging
-          (recur  discrete-state episode-done (+ ereward reward) (+ step 1)))
-        ))))
+          (recur  discrete-state episode-done (+ ereward reward) reward (+ step 1)))
+        prevreward))))
 
 (defn train
   [learner]
   (let [{episodes :episodes
-         platform :platform} learner]
+         epsilon  :epsilon
+         explore  :explore
+         platform :platform} learner
+        stats-every 500 ;+++
+        start-eps-decay 1
+        end-eps-decay (int (* episodes explore))
+        decay-by (/ epsilon (- end-eps-decay start-eps-decay))
+        maxreward (atom -1000)
+        minreward (atom 1000)
+        totalreward (atom 0)
+        ]
     (dotimes [episode episodes]
       ;; Setup the simulator
-      (println "*** Starting Episode " episode)
-      ((:reset platform) platform)
-      (Thread/sleep 1000)               ;Reset the platform and give it time to settle down
-      (run-episode learner episode))))
+      (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
+        (if (= 0 (mod eps 100)) (println "*** Starting Episode " episode "Epsilon=" eps))
+        ((:reset platform) platform)
+        (Thread/sleep 100)               ;Reset the platform and give it time to settle down
+        (let [reward (run-episode learner episode eps)]
+          (if (= 0 (mod (+ 1 episode) stats-every))
+            (do (println "Episode=" episode
+                         "Epsilon=" eps
+                         "Max reward=" (deref maxreward)
+                         "Average reward=" (/ (deref totalreward) stats-every)
+                         "Min reward=" (deref minreward))
+                (reset! maxreward -1000)
+                (reset! minreward 1000)
+                (reset! totalreward 0))
+            (do
+              (if (> reward (deref maxreward)) (reset! maxreward reward))
+              (if (> (deref minreward) reward) (reset! minreward reward))
+              (reset! totalreward (+ (deref totalreward) reward)))))))))
 
 ;;; Fin

@@ -68,10 +68,10 @@ class Rmq:
     def make_env(self, msg):
         self.plant.started(msg)
         envname, = msg['args']
-        print('gym make: ', envname)
+        #print('gym make: ', envname)
         self.env=gym.make(envname)
         self.plant.finished(msg)
-        print('make_env, env=', self.env)
+        #print('make_env, env=', self.env)
         self.publish_data_obs_rmq()
 
     def reset(self, msg):
@@ -79,18 +79,18 @@ class Rmq:
         # no args for reset -- alt, = msg['args']
         if not self.env==None:
             self.gym_new_state=self.env.reset()
-            print('reset') #, alt
+            #print('reset') #, alt
             self.publish_state_obs_rmq()
         self.plant.finished(msg)
-        print('done reset')
+        #print('done reset')
 
     def render(self, msg):
         self.plant.started(msg)
         # no args for render -- alt, = msg['args']
         self.env.render()
-        print('render') #, alt
+        #print('render') #, alt
         self.plant.finished(msg)
-        print('done render')
+        #print('done render')
 
     def perform_action(self, msg):
         action_name, = msg['args']
@@ -102,7 +102,7 @@ class Rmq:
         else:
             print('Bad action specified:', action_name)
         self.plant.finished(msg)
-        print('done perform_action')
+        #print('done perform_action')
 
     def publish_data_obs_rmq(self):
         gym_data_observations = self.make_gym_data_observation()
@@ -129,7 +129,7 @@ class Rmq:
 
     def publish_step_obs_rmq(self):
         gym_step_observations = self.make_step_observation()
-        pprint(gym_step_observations)
+        #pprint(gym_step_observations)
         self.plant.observations(None, gym_step_observations, copy_observations=False, plantid="gym")
 
     def make_step_observation(self):
@@ -144,7 +144,7 @@ class Rmq:
 
     def publish_state_obs_rmq(self):
         gym_state_observations = self.make_state_observation()
-        pprint(gym_state_observations)
+        #pprint(gym_state_observations)
         self.plant.observations(None, gym_state_observations, copy_observations=False, plantid="gym")
 
     def make_state_observation(self):
@@ -169,7 +169,7 @@ class Rmq:
     def handle_fn(self, msg):
         # print 'Got message routing key', routing_key
         # print 'handle rmq message:', utils.get_current_thread_name()
-        pprint(msg)
+        #pprint(msg)
         fn_name = msg['function-name']
         if fn_name == 'make_env':
             self.make_env(msg)
@@ -189,7 +189,7 @@ class Rmq:
 
     def shutdown(self):
         self.done = True
-        print('RMQ Shut down')
+        #print('RMQ Shut down')
         self.plant.close()
 
 

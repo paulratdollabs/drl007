@@ -34,7 +34,7 @@
                   ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
                   ;; These are learning related options - with reasonable defaults
                   ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
-                  ["-n" "--episodes n" "Number of Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
+                  ["-n" "--episodes n" "Number of Episodes" :default 25000 :parse-fn #(Integer/parseInt %)]
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
                   ["-x" "--explore f" "Portion of episodes to explore" :default 0.5 :parse-fn #(Float/parseFloat %)]
@@ -107,7 +107,7 @@
 
 (defn incoming-msgs [_ metadata ^bytes payload]
   (def received-count (inc received-count))
-  (when (zero? (mod received-count 1000))
+  #_(when (zero? (mod received-count 1000))
     (println "Messages received so far" received-count)
     )
   (let [st (String. payload "UTF-8")
@@ -134,7 +134,7 @@
                                      (let [field (get anobs :field)
                                            value (get anobs :value)]
                                        (cond  field
-                                              (do (println "Received " field "=" value)
+                                              (do ;;(println "Received " field "=" value)
                                                   (gym/updatefieldvalue field value))
                                              :else
                                              (do
@@ -256,10 +256,10 @@
                   ;; (gym/print-field-values)
                   (let [numobs  (gym/get-field-value :numobs)
                         numacts (gym/get-field-value :numacts)]
-                    (println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
+                    #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                       (let[initial-q-table (dmql/make-fixed-sized-q-table-uniform-random
                                             numobs ssdi numacts minq maxq)
-                           learner (dmql/initialize-learner cycl alph disc expl neps expl ssdi numobs numacts initial-q-table gym-if)
+                           learner (dmql/initialize-learner cycl alph disc 1.0 neps expl ssdi numobs numacts initial-q-table gym-if) ;+++ epsilon value should not be constant
                            #_(pprint initial-q-table)]
                         (dmql/train learner)
                         (println "Training completed."))))

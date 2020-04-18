@@ -33,6 +33,7 @@
                   ["-p" "--port rmqport" "RMQ Port" :default 5672 :parse-fn #(Integer/parseInt %)]
                   ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
                   ;; These are learning related options - with reasonable defaults
+                  ["-l" "--loadqtable edn" "Start from a prior Q-table" :default nil]
                   ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
                   ["-n" "--episodes n" "Number of Episodes" :default 25000 :parse-fn #(Integer/parseInt %)]
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
@@ -192,6 +193,7 @@
         exch (get-in parsed [:options :exchange])
         ifid (get-in parsed [:options :if])       ; Interface ID
         neps (get-in parsed [:options :episodes]) ; Number of episodes
+        loaq (get-in parsed [:options :loadqtable]) ; Restart learning from a prior Q table
         alph (get-in parsed [:options :alpha])    ; Learning rate
         disc (get-in parsed [:options :discount]) ; Discount rate
         minq (get-in parsed [:options :min-q])    ; Minimum initial Q value
@@ -257,9 +259,14 @@
                   (let [numobs  (gym/get-field-value :numobs)
                         numacts (gym/get-field-value :numacts)]
                     #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
-                      (let[initial-q-table (dmql/make-fixed-sized-q-table-uniform-random
-                                            numobs ssdi numacts minq maxq)
-                           learner (dmql/initialize-learner cycl alph disc 1.0 neps expl ssdi numobs numacts initial-q-table gym-if) ;+++ epsilon value should not be constant
+                    (let [initial-q-table
+                          (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
+                            (do
+                              (println "Restarting from a prior q-table: " loaq)
+                              (dmql/read-q-table loaq))
+                            (dmql/make-fixed-sized-q-table-uniform-random
+                             numobs ssdi numacts minq maxq))
+                           learner (dmql/initialize-learner cycl 200 alph disc 1.0 neps expl ssdi numobs numacts initial-q-table gym-if) ;+++ epsilon value should not be constant
                            #_(pprint initial-q-table)]
                         (dmql/train learner)
                         (println "Training completed."))))

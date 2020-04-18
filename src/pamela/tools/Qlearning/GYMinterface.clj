@@ -121,6 +121,9 @@
 
 (defn get-current-state
   [numobs]
+  (if (not (number? numobs))
+    (do (println "numobs (" numobs ")is not a number.  This usually means that you need to restart the plant.")
+        (System/exit 0)))
   (case numobs
     1 [(get-field-value :state0)]
     2 [(get-field-value :state0) (get-field-value :state1)]

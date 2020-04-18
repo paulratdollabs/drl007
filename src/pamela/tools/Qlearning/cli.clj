@@ -28,10 +28,12 @@
                   ["-o" "--output file" "output" :default "spamela.txt"]
                   ["-m" "--model ir" "Model IR" :default nil]
                   ["-r" "--root name" "Root pClass" :default "main"]
+
                   ;; RabbitMQ related options
                   ["-h" "--host rmqhost" "RMQ Host" :default "localhost"]
                   ["-p" "--port rmqport" "RMQ Port" :default 5672 :parse-fn #(Integer/parseInt %)]
                   ["-e" "--exchange name" "RMQ Exchange Name" :default "dmrl"]
+
                   ;; These are learning related options - with reasonable defaults
                   ["-l" "--loadqtable edn" "Start from a prior Q-table" :default nil]
                   ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
@@ -45,6 +47,8 @@
                   ["-s" "--statedivision n" "Discretization of each state dimension" :default 20  :parse-fn #(Integer/parseInt %)]
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
+                  ["-z" "--epsilon fr" "Starting value for epsilon exploration 1 >= fr >= 0" :default 1.0 :parse-fn #(Float/parseFloat %)]
+
                   ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
                   ["-t" "--tracefile file" " Trace filename" :default nil]
@@ -182,6 +186,9 @@
   ;;(println args)
   ;;(println cli-options)
   (let [parsed (cli/parse-opts args cli-options)
+        {:keys [options arguments error summary]} parsed
+        {:keys [help version verbose test-connection qlearn] } options
+        cmd (first arguments)
         verbosity (read-string (get-in parsed [:options :verbose]))
         _ (if (> verbosity 1) (println parsed))
         model (get-in parsed [:options :model])
@@ -196,6 +203,7 @@
         loaq (get-in parsed [:options :loadqtable]) ; Restart learning from a prior Q table
         alph (get-in parsed [:options :alpha])    ; Learning rate
         disc (get-in parsed [:options :discount]) ; Discount rate
+        epsi (get-in parsed [:options :epsilon])  ; Epsilon starting value
         minq (get-in parsed [:options :min-q])    ; Minimum initial Q value
         maxq (get-in parsed [:options :max-q])    ; Maximum initial Q value
         expl (get-in parsed [:options :explore])  ; fraction of episodes for which exploration takes place
@@ -210,18 +218,9 @@
         help (get-in parsed [:options :help])
         _ (if (> verbosity 0) (println ["help = " help]))
         root (symbol (get-in parsed [:options :root]))
-        ;;_ (if root (println ["root = " root]))
-        _ (if (and model (> verbosity 0)) (println ["model = " model]))
-        _ (do
-            (def repl false)
-            (when help
-              (println (usage (:summary parsed)))
-              (when-not repl
-                (System/exit 0))))
-
         _ (if (> verbosity 0) (println "DOLL Reinforcement Q-Learner" (:options parsed)))
         ]
-
+    ;; RabbitQG
     (def exchange exch)
     (def plantifid (keyword ifid))
     (def watchedplant wpid)
@@ -239,43 +238,45 @@
 
       (println "RabbitMQ connection Established, plantifid=" plantifid)
 
-      (cond (>= (count args) 1)
-            (doseq [arg args]
-              (case (keyword arg)
-                :test-connection
-                (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
-                  ((:initialize-world gym-if) gym-if)
-                  ((:reset gym-if) gym-if)
-                  ((:perform gym-if) gym-if 0)
-                  ((:render gym-if) gym-if))
+      (cond (>= (count arguments) 1)
+            (case (keyword (first arguments))
+              :test-connection
+              (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
+                ((:initialize-world gym-if) gym-if)
+                ((:reset gym-if) gym-if)
+                ((:perform gym-if) gym-if 0)
+                ((:render gym-if) gym-if))
 
-                :qlearn
-                ;; Start the learner!
-                (let [_ (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
-                      gym-if  (gym/make-gym-interface (list gwld) "dmrl" channel exchange)]
-                  ((:initialize-world gym-if) gym-if) ; Startup the simulator
-                  (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
-                  ;; (gym/print-field-values)
-                  (let [numobs  (gym/get-field-value :numobs)
-                        numacts (gym/get-field-value :numacts)]
-                    #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
-                    (let [initial-q-table
-                          (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
-                            (do
-                              (println "Restarting from a prior q-table: " loaq)
-                              (dmql/read-q-table loaq))
-                            (dmql/make-fixed-sized-q-table-uniform-random
-                             numobs ssdi numacts minq maxq))
-                           learner (dmql/initialize-learner cycl 200 alph disc 1.0 neps expl ssdi numobs numacts initial-q-table gym-if) ;+++ epsilon value should not be constant
-                           #_(pprint initial-q-table)]
-                        (dmql/train learner)
-                        (println "Training completed."))))
+              :qlearn
+              ;; Start the learner!
+              (let [_ (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
+                    gym-if  (gym/make-gym-interface (list gwld) "dmrl" channel exchange)]
+                ((:initialize-world gym-if) gym-if) ; Startup the simulator
+                (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
+                ;; (gym/print-field-values)
+                (let [numobs  (gym/get-field-value :numobs)
+                      numacts (gym/get-field-value :numacts)]
+                  #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
+                  (let [initial-q-table
+                        (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
+                          (do
+                            (println "Restarting from a prior q-table: " loaq)
+                            (dmql/read-q-table loaq))
+                          (dmql/make-fixed-sized-q-table-uniform-random
+                           numobs ssdi numacts minq maxq))
+                        learner (dmql/initialize-learner cycl 200 alph disc epsi neps expl ssdi
+                                                         numobs numacts initial-q-table gym-if)
+                        #_(pprint initial-q-table)]
+                    (dmql/train learner)
+                    (println "Training completed."))))
 
-                (println "Unknown command: " arg "try: test-connection or qlearn")))
+              (println "Unknown command: " (first arguments) "try: test-connection or qlearn"))
 
             :else
-            (println "No command specified, try test-connection or qlearn"))
-      (System/exit 0)
+            (do
+              (println "No command specified, try test-connection or qlearn")
+              (System/exit 0)))
+
       ;; If no model was specified, we assume that a command will provide the model to load  later.
       (when last-ctag
         (mq/cancel-subscription (first last-ctag) (second last-ctag)))

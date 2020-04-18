@@ -39,6 +39,9 @@
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
                   ["-x" "--explore f" "Portion of episodes to explore" :default 0.5 :parse-fn #(Float/parseFloat %)]
                   ["-c" "--cycletime ms" "Cycle time in milliseconds" :default 200 :parse-fn #(Integer/parseInt %)]
+                  ["-q" "--min-q n" "Minimum Q value" :default -2.0  :parse-fn #(Float/parseFloat %)]
+                  ["-u" "--max-q n" "Maximum Q value" :default 0.0   :parse-fn #(Float/parseFloat %)]
+                  ["-s" "--statedivision n" "Discretization of each state dimension" :default 20  :parse-fn #(Integer/parseInt %)]
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
                   ;; Debugging options
@@ -131,7 +134,7 @@
                                      (let [field (get anobs :field)
                                            value (get anobs :value)]
                                        (cond  field
-                                              (do #_(println "Received " field "=" value)
+                                              (do (println "Received " field "=" value)
                                                   (gym/updatefieldvalue field value))
                                              :else
                                              (do
@@ -191,7 +194,10 @@
         neps (get-in parsed [:options :episodes]) ; Number of episodes
         alph (get-in parsed [:options :alpha])    ; Learning rate
         disc (get-in parsed [:options :discount]) ; Discount rate
+        minq (get-in parsed [:options :min-q])    ; Minimum initial Q value
+        maxq (get-in parsed [:options :max-q])    ; Maximum initial Q value
         expl (get-in parsed [:options :explore])  ; fraction of episodes for which exploration takes place
+        ssdi (get-in parsed [:options :statedivision]) ; State space discretization for each dimension
         cycl (get-in parsed [:options :cycletime]); Cycletime in milliseconds
         gwld (get-in parsed [:options :gymworld]) ; Name of the GYM world to instantiate
         wpid (get-in parsed [:options :watchedplant])
@@ -244,9 +250,19 @@
                 :qlearn
                 ;; Start the learner!
                 (let [_ (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
-                      learner (dmql/initialize-learner cycl alph disc expl nil #_initialQ)] ;+++ provide an initial Q
-                  (dmql/train learner neps (gym/make-gym-interface gwld "dmrl" channel exchange))
-                  (println "Training completed."))
+                      gym-if  (gym/make-gym-interface (list gwld) "dmrl" channel exchange)]
+                  ((:initialize-world gym-if) gym-if) ; Startup the simulator
+                  (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
+                  ;; (gym/print-field-values)
+                  (let [numobs  (gym/get-field-value :numobs)
+                        numacts (gym/get-field-value :numacts)]
+                    (println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
+                      (let[initial-q-table (dmql/make-fixed-sized-q-table-uniform-random
+                                            numobs ssdi numacts minq maxq)
+                           learner (dmql/initialize-learner cycl alph disc expl neps expl ssdi numobs numacts initial-q-table gym-if)
+                           #_(pprint initial-q-table)]
+                        (dmql/train learner)
+                        (println "Training completed."))))
 
                 (println "Unknown command: " arg "try: test-connection or qlearn")))
 

@@ -30,17 +30,20 @@
 ;;; DOLL Plant Learning Interface
 
 (defrecord dplinterface [;; World-specific parameters
-                          world-parameters ; a list of arguments
-                          ;; RabbitMQ information
-                          routing channel exchange
-                          ;; Control of the simulator/plant
-                          initialize-world shutdown
-                          ;; Actions to be performed on the simulator
-                          perform reset render
-                          ;; Functions that return values
-                          get-discrete-state goal-achieved])
+                         world-parameters ; a list of arguments
+                         ;; RabbitMQ information
+                         routing channel exchange
+                         ;; Control of the simulator/plant
+                         initialize-world shutdown
+                         ;; Actions to be performed on the simulator
+                         perform reset render
+                         ;; Functions that return values
+                         goal-achieved
+                         ;; Access to filed values
+                         get-field-value set-field-value get-current-state
+                         ])
 
-(defn make-dpl-interface
+#_(defn make-dpl-interface
   [a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11]
   (dplinterface. a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11))
 

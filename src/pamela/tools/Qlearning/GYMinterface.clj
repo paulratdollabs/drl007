@@ -34,26 +34,28 @@
 (def ^:dynamic *fields* {})
 (def ^:dynamic *debug-fields* false)
 
+(defn print-field-values
+  []
+  (pprint *fields*))
+
 (defn get-field-value
   [field]
-  (let [value (get *fields* field)]
-    (and value (deref value))))
+  (let [value (get *fields* (keyword field))]
+    (if value
+      (deref value)
+      (do (println "field " field "not found in " *fields*)
+          :not-found))))
+
+(def fv get-field-value)
 
 (defn updatefieldvalue
   [field value]
-  (let [known-field (get *fields* field)]
+  (let [kfield (keyword field)
+        known-field (get *fields* kfield)]
     (if known-field
       (reset! known-field value)
-      (def ^:dynamic *fields* (merge *fields* {field (atom value)}))))
-  (if *debug-fields* (println "***Set field " field "=" (get *fields* field))))
-
-(defn actionselector
-  [list-of-atoms]
-  (deref (first list-of-atoms))) ;+++
-
-(defn reset-state                       ; Invoke the reset +++
-  []
-  nil)
+      (def ^:dynamic *fields* (merge *fields* {kfield (atom value)}))))
+  (if *debug-fields* (println "***Set field " field "=" (get *fields* (keyword field)))))
 
 (defn initialize-simulator
   [gym-world routing channel exchange]
@@ -97,9 +99,35 @@
    exchange)
   nil)
 
-(defn get-discrete-state                ; Discretize the state +++
-  [raw-state]
-  nil)
+(defn get-obs-high
+  [numobs]
+  (case numobs
+    1 [(get-field-value :high0)]
+    2 [(get-field-value :high0) (get-field-value :high1)]
+    3 [(get-field-value :high0) (get-field-value :high1) (get-field-value :high2)]
+    4 [(get-field-value :high0) (get-field-value :high1) (get-field-value :high2) (get-field-value :high3)]
+    (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
+        (System/exit 0))))
+
+(defn get-obs-low
+  [numobs]
+  (case numobs
+    1 [(get-field-value :low0)]
+    2 [(get-field-value :low0) (get-field-value :low1)]
+    3 [(get-field-value :low0) (get-field-value :low1) (get-field-value :low2)]
+    4 [(get-field-value :low0) (get-field-value :low1) (get-field-value :low2) (get-field-value :low3)]
+    (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
+        (System/exit 0))))
+
+(defn get-current-state
+  [numobs]
+  (case numobs
+    1 [(get-field-value :state0)]
+    2 [(get-field-value :state0) (get-field-value :state1)]
+    3 [(get-field-value :state0) (get-field-value :state1) (get-field-value :state2)]
+    4 [(get-field-value :state0) (get-field-value :state1) (get-field-value :state2) (get-field-value :state3)]
+    (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
+        (System/exit 0))))
 
 (defn goal-achieved                     ; Open to decide differently
   [state done]
@@ -123,10 +151,14 @@
                      (reset (:routing self) (:channel self) (:exchange self)))
                    (fn [self]           ; :render
                      (render (:routing self) (:channel self) (:exchange self)))
-                   (fn [self state]     ; :get-discrete-state
-                     (get-discrete-state state))
-                   (fn [self state]     ; :goal-achieved
-                     (get-discrete-state state)))]
+                   (fn [self state done]     ; :goal-achieved
+                     (goal-achieved state done))
+                   (fn [self field]     ; :get-field-value
+                     (get-field-value field))
+                   (fn [self field val] ; :set-field-value
+                     (updatefieldvalue field val))
+                   (fn [self numobs]    ; :get-current-state
+                     (get-current-state numobs)))]
     interface))
 
 ;;; Fin

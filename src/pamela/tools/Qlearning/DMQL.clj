@@ -23,54 +23,50 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PAMELA RL Q-Learning
 
-(defn actionselector
-  [list-of-atoms]
-  (deref (first list-of-atoms))) ;+++
-
-(defn reset-state                       ; Invoke the reset +++
-  []
-  nil)
-
-(defn perform                           ; Invoke the action +++
-  [action]
-  nil)
-
-(defn get-discrete-state                ; Discretize the state +++
-  [raw-state]
-  nil)
-
-(defn goal-achieved                     ; Open to decide differently
-  [state done]
-  done)
-
 (defn initialize-learner
-  [cycletime learningrate discount epsilon initialQ]
+  [cycletime learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
    :alpha learningrate                  ; 0 lt learningrate lt 1
    :gamma discount                      ; 0 lt discount lt 1
-   :epsilon 1                           ;
-   :actionselectfunction gym/actionselector ; function that selects an action.
-   :reset-state gym/reset-state             ; function returns starting discrete-state
-   :perform gym/perform
-   :reset gym/reset
-   :initialize-plant gym/initialize-simulator
-   :render gym/render
-   :shutdown gym/shutdown
-   :discretize-state gym/get-discrete-state
-   :goal-achieved gym/goal-achieved
+   :epsilon 1
+   :episodes episodes                   ; number of episodes
+   :explore explore
+   :platform platform
+   :discretization ssdi
+   :numobs numobs
+   :numacts numacts
+   ;;; below moved to DPL interface
+   ;;:reset-state gym/reset-state             ; function returns starting discrete-state
+   ;;:perform gym/perform
+   ;;:reset gym/reset
+   ;;:initialize-plant gym/initialize-simulator
+   ;;:render gym/render
+   ;;:shutdown gym/shutdown
+   ;;:discretize-state gym/get-discrete-state
+   ;;:goal-achieved gym/goal-achieved
+   ;;; this belongs in the platform -- or does it?
+   ;;;:actionselectfunction gym/actionselector ; function that selects an action.
    })
+
+(defn actionselector
+  [list-of-atoms]
+  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
+  (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
+    ;; (println "Best of" list-of-atoms "is " best)
+    (.indexOf list-of-atoms best)))
 
 ;;;
 (defn make-fixed-sized-q-table-uniform-random
   [num-state-variables discretization num-actions low high]
   (if (= num-state-variables 0)
-    (repeatedly num-actions (fn [] (atom
-                                    (+ low (* (- high low)(rand))))))
-    (repeatedly discretization
-                (fn [] (make-fixed-sized-q-table-uniform-random
-                        (- num-state-variables 1) discretization num-actions low high)))))
+    (vec (doall (repeatedly num-actions
+                            (fn [] (atom
+                                    (+ low (* (- high low)(rand))))))))
+    (vec (doall (repeatedly discretization
+                            (fn [] (make-fixed-sized-q-table-uniform-random
+                                    (- num-state-variables 1) discretization num-actions low high)))))))
 
 (defn fixed-sized-q-value
   [q-table & args]
@@ -82,47 +78,85 @@
 
 (defn max-atom
   [list-of-atoms]
-  (max (map deref list-of-atoms)))
+  (println "max-atom called with " list-of-atoms)
+  (apply max (map deref list-of-atoms)))
+
+(defn win-size
+  [numobs ssdi]
+  (vec (map (fn [high low] (/ (- high low) ssdi)) (gym/get-obs-high numobs) (gym/get-obs-low numobs))))
+
+(defn get-discrete-state
+  [state obslow disc-os-win-size]
+  (println "state=" state "low=" obslow "win=" disc-os-win-size)
+  (let [discstate (vec
+                   (doall
+                    (map (fn [state low winsize] (int (/ (- state low) winsize)))
+                         state obslow disc-os-win-size)))]
+    (println "discstate=" discstate)
+    discstate))
 
 (defn run-episode
-  [learner startstate]
+  [learner episode]
   (let [{;; Pull out all of the pieces aheadof the loop
-         q-table :q-table
+         qt :q-table
+         cycletime :cycletime
          alpha   :alpha
          gamma   :gamma
-         select  :actionselectionfunction} learner]
-    (loop [state startstate
+         ssdi    :discretization
+         numobs  :numobs
+         numacts :numacts
+         platform :platform} learner
+        q-table (deref qt)
+        current-state ((:get-current-state platform) platform numobs)
+        obslow (gym/get-obs-low numobs)
+        disc-os-size (vec (repeatedly numobs (fn [] ssdi)))
+        disc-os-win-size (win-size numobs ssdi)
+        discstate (get-discrete-state current-state obslow disc-os-win-size)
+        ]
+    (loop [state discstate
            donep false
-           ereward 0]
+           ereward 0
+           step 1]
+      (println "state = " discstate)
       (if (not donep)
         (let [;; Select a action
-              action (select (apply fixed-sized-q-value state))
+              action (actionselector (apply fixed-sized-q-value q-table state))
               ;; Perform action
-              [new-state reward d] (perform action)
-              discrete-state (get-discrete-state new-state)]
+              _ ((:perform platform) platform action)
+              _ (Thread/sleep 10) ; was cycletime
+              new-state ((:get-current-state platform) platform numobs)
+              reward ((:get-field-value platform) platform :reward)
+              episode-done ((:get-field-value platform) platform :done)
+              discrete-state (get-discrete-state  new-state obslow disc-os-win-size)]
+          (if (= 0 (mod episode 1000)) ((:render platform) platform))
+          (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" discrete-state)
           (cond
-            (not d)
-            (let [max-future-q (max-atom (fixed-sized-q-value q-table discrete-state))
-                  q-pos (fixed-sized-q-value (fixed-sized-q-value q-table state) action)
+            (not episode-done)
+            (let [max-future-q (max-atom (apply fixed-sized-q-value q-table discrete-state))
+                  q-pos (fixed-sized-q-value (apply fixed-sized-q-value q-table state) action)
                   current-q (deref q-pos)
-                  new-q (+ (* (- 1.0 alpha) current-q) ; Bellman's Equation
-                           (* alpha (+ reward (* gamma max-future-q))))]
-              ;;(set! q-pos new-q)
-              )
+                  ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
+                  ;; Bellman's Equation
+                  new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
+              (reset! q-pos new-q))
 
-            (goal-achieved new-state d)
-            (let [q-pos (fixed-sized-q-value (fixed-sized-q-value q-table discrete-state) action)]
-              ;;(set! q-pos (+ ereward reward))
+            ((:goal-achieved platform) platform new-state episode-done)
+            (let [q-pos (fixed-sized-q-value (apply fixed-sized-q-value q-table discrete-state) action)]
+              (reset! q-pos (+ ereward reward))
               ))
-
-          (recur  discrete-state d (+ ereward reward)))
+          ;;(Thread/sleep 1000) ;; Slow it down for debugging
+          (recur  discrete-state episode-done (+ ereward reward) (+ step 1)))
         ))))
 
 (defn train
-  [learner episodes gym-if]
-  (let [{q-table :q-table
-         reset-state :reset-state} learner]
-    nil #_(dotimes [episode episodes]
-      (run-episode learner (get-discrete-state (reset-state))))))
+  [learner]
+  (let [{episodes :episodes
+         platform :platform} learner]
+    (dotimes [episode episodes]
+      ;; Setup the simulator
+      (println "*** Starting Episode " episode)
+      ((:reset platform) platform)
+      (Thread/sleep 1000)               ;Reset the platform and give it time to settle down
+      (run-episode learner episode))))
 
 ;;; Fin

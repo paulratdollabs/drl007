@@ -39,6 +39,7 @@ class Rmq:
     gym_reward = 0
     gym_new_state = None
     gym_done = False
+    gym_goal_position = 0
 
     obs_high = None
     obs_low = None
@@ -77,8 +78,9 @@ class Rmq:
         self.plant.started(msg)
         # no args for reset -- alt, = msg['args']
         if not self.env==None:
-            self.env.reset()
+            self.gym_new_state=self.env.reset()
             print('reset') #, alt
+            self.publish_state_obs_rmq()
         self.plant.finished(msg)
         print('done reset')
 
@@ -95,6 +97,7 @@ class Rmq:
         action_number = int(action_name)
         if self.env.action_space.n >= action_number >= 0:
             self.gym_new_state, self.gym_reward, self.gym_done, _ = self.env.step(action_number)
+            self.gym_goal_position = self.env.goal_position
             self.publish_step_obs_rmq()
         else:
             print('Bad action specified:', action_name)
@@ -135,8 +138,21 @@ class Rmq:
         p3=[self.plant.make_observation('state1',  float(self.gym_new_state[1]))] if self.num_obs>1 else []
         p4=[self.plant.make_observation('state2',  float(self.gym_new_state[2]))] if self.num_obs>2 else []
         p5=[self.plant.make_observation('state3',  float(self.gym_new_state[3]))] if self.num_obs>3 else []
-        p6=[self.plant.make_observation('done',    self.gym_done)]
-        return p1+p2+p3+p4+p5+p6
+        p6=[self.plant.make_observation('done',          self.gym_done)]
+        p7=[self.plant.make_observation('goal_position', self.gym_goal_position)]
+        return p1+p2+p3+p4+p5+p6+p7
+
+    def publish_state_obs_rmq(self):
+        gym_state_observations = self.make_state_observation()
+        pprint(gym_state_observations)
+        self.plant.observations(None, gym_state_observations, copy_observations=False, plantid="gym")
+
+    def make_state_observation(self):
+        p2=[self.plant.make_observation('state0',  float(self.gym_new_state[0]))] if self.num_obs>0 else []
+        p3=[self.plant.make_observation('state1',  float(self.gym_new_state[1]))] if self.num_obs>1 else []
+        p4=[self.plant.make_observation('state2',  float(self.gym_new_state[2]))] if self.num_obs>2 else []
+        p5=[self.plant.make_observation('state3',  float(self.gym_new_state[3]))] if self.num_obs>3 else []
+        return p2+p3+p4+p5
 
     def dispatch_func(self, msg, rkey_):
         if 'function-name' in msg:

@@ -1,3 +1,0 @@
-[submodule "drl"]
-	path = drl
-	url = git@github.com:paulratdollabs/drl007.git

@@ -16,6 +16,7 @@
                     [avenir "0.2.1"]
                     [org.clojure/core.async "0.2.395"]
                     [org.clojure/tools.cli "0.3.5"]
+                    [org.clojure/math.numeric-tower "0.0.2"]
                     [net.mikera/core.matrix "0.61.0"]
                     [net.mikera/vectorz-clj "0.47.0"]
                     [environ "1.1.0"]

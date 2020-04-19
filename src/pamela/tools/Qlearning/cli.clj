@@ -48,6 +48,7 @@
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
                   ["-z" "--epsilon fr" "Starting value for epsilon exploration 1 >= fr >= 0" :default 1.0 :parse-fn #(Float/parseFloat %)]
+                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1 :parse-fn #(Integer/parseInt %)]
 
                   ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
@@ -210,6 +211,7 @@
         ssdi (get-in parsed [:options :statedivision]) ; State space discretization for each dimension
         cycl (get-in parsed [:options :cycletime]); Cycletime in milliseconds
         gwld (get-in parsed [:options :gymworld]) ; Name of the GYM world to instantiate
+        mode (get-in parsed [:options :mode])     ; Mode 0=normal, 1=Monte-Carlo, etc.
         wpid (get-in parsed [:options :watchedplant])
         trfn (get-in parsed [:options :tracefile])
         frfi (get-in parsed [:options :fromfile])
@@ -249,7 +251,8 @@
 
               :qlearn
               ;; Start the learner!
-              (let [_ (println (format "*** Starting the Q learner with %s (%d episodes) ***%n" gwld neps))
+              (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
+                                       gwld neps mode epsi expl))
                     gym-if  (gym/make-gym-interface (list gwld) "dmrl" channel exchange)]
                 ((:initialize-world gym-if) gym-if) ; Startup the simulator
                 (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
@@ -264,11 +267,12 @@
                             (dmql/read-q-table loaq))
                           (dmql/make-fixed-sized-q-table-uniform-random
                            numobs ssdi numacts minq maxq))
-                        learner (dmql/initialize-learner cycl 200 alph disc epsi neps expl ssdi
+                        learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi
                                                          numobs numacts initial-q-table gym-if)
                         #_(pprint initial-q-table)]
                     (dmql/train learner)
-                    (println "Training completed."))))
+                    (println "Training completed.")
+                    (System/exit 0))))
 
               (println "Unknown command: " (first arguments) "try: test-connection or qlearn"))
 

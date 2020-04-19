@@ -18,6 +18,7 @@
             [clojure.java.io :as io]
             [clojure.core :as cc]
             [clojure.edn :as edn]
+            [clojure.math.numeric-tower :as math]
             [environ.core :refer [env]]
             [pamela.tools.Qlearning.GYMinterface :as gym])
   (:gen-class))
@@ -29,10 +30,11 @@
 
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
-  [cycletime max-steps learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
+  [cycletime max-steps mode learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
+   :mode mode                           ; Choose action selection mode
    :max-steps max-steps                 ; Maximum number of steps in an episode
    :alpha learningrate                  ; 0 lt learningrate lt 1
    :gamma discount                      ; 0 lt discount lt 1
@@ -44,49 +46,6 @@
    :numacts numacts
    :platform platform
    })
-
-(defn actionselector
-  "Select an action either randomly according to epsilon or the best."
-  [list-of-atoms numacts eps]
-  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
-  (if (> (rand) eps)
-    (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
-      ;; (println "Best of" list-of-atoms "is " best)
-      (.indexOf list-of-atoms best))
-    (int (* (rand) numacts))))
-
-(defn mc-select-nth
-  [atoms]
-  (let [vals (map deref atoms)
-        minv (reduce min vals)
-        maxv (reduce max vals)
-        span (- maxv minv)
-        adjustment (- (/ span 4.0) minv)
-        rebased (map (fn [n] (+ n adjustment)) vals)
-        total (reduce + rebased)
-        rn (* (rand) (- total 1))]
-    (println "vals=" vals "rebased=" rebased "minv=" minv "maxv=" maxv "total=" total "rn=" rn)
-    (loop [order 0
-           rvals rebased
-           rnum rn]
-      ;;(println "order=" order "rval=" rvals "rnum=" rnum)
-      (if (< rnum (first rvals))
-        order
-        (recur (+ order 1) (rest rvals) (- rnum (first rvals)))))))
-
-;;; This one still incorporates the "epsilon" mechanism for unbiased randomness, but it never totally
-;;; yields to "best first".  For that, use "actionselector" which is interchangeable for the textbook
-;;; version.  This version never completely gives up on exploration, but unlike the epsilon mechanism,
-;;; the exploration becomes more focussed. Probably (not yet confirmed) the epsilon mechanism would be
-;;; useful at the beginning perhaps for 25% of the episodes instead of 50%.
-
-(defn monte-carlo-actionselector
-  "Select an action using monte-carlo sampling."
-  [list-of-atoms numacts eps]
-  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
-  (if (> (rand) eps)
-    (mc-select-nth list-of-atoms)
-    (int (* (rand) numacts))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Q-Table representation
@@ -107,15 +66,14 @@
   [q-table & args]
   (reduce nth q-table args))
 
-(defn q-lookup-action
-  "Return the atom representing the Q value for the given action in the given discretized state."
-  [q-table d-state action]
-  (fixed-sized-q-value (apply fixed-sized-q-value q-table d-state) action))
+(defn get-all-actions-quality
+  [learner d-state]
+  (apply fixed-sized-q-value (deref (:q-table learner)) d-state))
 
-(defn q-lookup-all-actions
-  "Return the vector of atoms representing the q-table values for the actions at the givene discretized state."
-  [q-table d-state]
-  (apply fixed-sized-q-value q-table d-state))
+(defn get-action-quality
+  "Return the atom representing the Q value for the given action in the given discretized state."
+  [learner d-state action]
+  (fixed-sized-q-value (apply fixed-sized-q-value (deref (:q-table learner)) d-state) action))
 
 (defn deatomize-q-table
   [qtable]
@@ -199,12 +157,89 @@
 (def successes 0)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Action Selection
+
+(defn textbook-action-selector-with-epsilon-randomization
+  "Select an action either randomly according to epsilon or the best."
+  [list-of-atoms numacts eps]
+  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
+  (if (> (rand) eps)
+    (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
+      ;; (println "Best of" list-of-atoms "is " best)
+      (.indexOf list-of-atoms best))
+    (int (* (rand) numacts))))
+
+(defn mc-select-nth
+  [atoms eps]
+  (let [vals (map deref atoms)
+        powr (* 4.0 (- 1 eps))          ;eps varies from 1 to 0, Powr varies from 0 to 4
+        minv (reduce min vals)
+        maxv (reduce max vals)
+        span (float (- maxv minv))
+        adjustment (- (/ span (+ 1 powr)) minv)
+        rebased (map (fn [n] (math/expt (/ (+ n adjustment) span) powr)) vals)
+        ;; rebased (map (fn [n] (* (/ (+ n adjustment) span) (/ (+ n adjustment) span))) vals)
+        total (reduce + rebased)
+        rn (* (rand) total)]
+    ;;(println "vals=" vals "rebased=" rebased "minv=" minv "maxv=" maxv "total=" total "rn=" rn)
+    (loop [order 0
+           rvals rebased
+           rnum rn]
+      ;;(println "order=" order "rval=" rvals "rnum=" rnum)
+      (if (or (< rnum (first rvals)) (= (rest rvals) ()))
+        order
+        (recur (+ order 1) (rest rvals) (- rnum (first rvals)))))))
+
+(defn monte-carlo-action-selector
+  "Select an action using monte-carlo sampling."
+  [list-of-atoms numacts eps epsilon mode] ; epsilon is epsilon randomness, eps is Monte-Carlo confidence
+  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
+  (if (and (= mode 2) (< (rand) epsilon))
+    (int (* (rand) numacts))
+    (mc-select-nth list-of-atoms eps)))
+
+(def discrepencies 0)
+(def comparisons 0)
+
+(defn select-action
+  "Select an action using algorithm selected by --mode."
+  [learner dstate epsilon]
+  (let [{q-table :q-table
+         mode    :mode
+         numacts :numacts} learner
+        all-actions (get-all-actions-quality learner dstate)]
+    (case mode
+      ;; Mode 0, the default is the textbook selection with epsilon randomized selection.
+      0 (textbook-action-selector-with-epsilon-randomization all-actions numacts epsilon)
+
+      ;; Mode 1, DOLL Monte-Carlo selection based on a Bayesian model of knowledge (Preferred!)
+      1 (monte-carlo-action-selector all-actions numacts epsilon 0.0 mode)
+
+      ;; Mode 2, Same as above overlaid with epsilon randomization (just for comparison purposes)
+      2 (monte-carlo-action-selector all-actions numacts epsilon epsilon mode)
+
+      ;; Compare mode
+      3 (let [tb (textbook-action-selector-with-epsilon-randomization all-actions numacts epsilon)
+              mc (monte-carlo-action-selector all-actions numacts epsilon 0.0 mode)
+              aa (map deref all-actions)]
+          (def comparisons (+ 1 comparisons))
+          (if (not (= mc tb))
+            (do
+              (def discrepencies (+ 1 discrepencies))
+              (println "*** Voting on " aa "tb=" tb "mc=" mc "discrepencies=" discrepencies "/" comparisons)))
+          tb)
+
+      ;; Any unspecified mode uses textbook select "best" without epsilon randomization nor Monte-Carlo.
+      (textbook-action-selector-with-epsilon-randomization all-actions numacts 0.0)))) ; Practically useless!
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Training
 
 (defn run-episode
   "Train a single episode."
   [learner episode epsilon]
   (let [{;; Pull out all of the pieces aheadof the loop
+         mode      :mode
          qt        :q-table
          cycletime :cycletime
          max-steps :max-steps
@@ -228,10 +263,7 @@
       ;; (println "state = " discstate)
       (if (not donep)
         (let [;; Select a action
-              ;; Make these selectable from the commandline+++
-              action (actionselector (q-lookup-all-actions q-table current-d-state) numacts epsilon)
-              ;;action (monte-carlo-actionselector (q-lookup-all-actions q-table current-d-state) numacts epsilon)
-              ;; Perform action
+              action (select-action learner current-d-state epsilon)
               _ ((:perform platform) platform action)
               _ (Thread/sleep 10) ; was cycletime
               new-state ((:get-current-state platform) platform numobs)
@@ -242,8 +274,8 @@
           ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
           (cond
             (and (not episode-done) (not (>= step max-steps)))
-            (let [max-future-q (max-atom (q-lookup-all-actions q-table new-d-state))
-                  q-pos (q-lookup-action q-table current-d-state action)
+            (let [max-future-q (max-atom (get-all-actions-quality learner new-d-state))
+                  q-pos (get-action-quality learner current-d-state action)
                   current-q (deref q-pos)
                   ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
                   ;; Bellman's Equation
@@ -251,7 +283,7 @@
               (reset! q-pos new-q))
 
             ((:goal-achieved platform) platform new-state episode-done)
-            (let [q-pos (q-lookup-action q-table new-d-state action)]
+            (let [q-pos (get-action-quality learner new-d-state action)]
               (reset! q-pos (+ reward (+ 1 (/ (float episode) max-steps)))) ; was (+ ereward reward)
               (def successes (+ 1 successes))
               (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
@@ -276,6 +308,7 @@
         minreward (atom :unset)
         totalreward (atom :unset)
         learning-history (atom [])]
+    ;;(pprint learner)
     (dotimes [episode episodes]
       ;; Setup the simulator
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]

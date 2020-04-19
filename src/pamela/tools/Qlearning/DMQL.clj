@@ -55,17 +55,17 @@
       (.indexOf list-of-atoms best))
     (int (* (rand) numacts))))
 
-;;; Make all of the negative values positive, then subtract the most negative for all of the positive
-;;; numbers in order that the
 (defn mc-select-nth
   [atoms]
   (let [vals (map deref atoms)
         minv (reduce min vals)
         maxv (reduce max vals)
-        rebased (map (fn [n] (if (< n 0) (- n) (- n (min 0 minv)))) vals)
+        span (- maxv minv)
+        adjustment (- (/ span 4.0) minv)
+        rebased (map (fn [n] (+ n adjustment)) vals)
         total (reduce + rebased)
         rn (* (rand) (- total 1))]
-    ;;(println "vals=" vals "rebased=" rebased "minv=" minv "maxv=" maxv "total=" total "rn=" rn)
+    (println "vals=" vals "rebased=" rebased "minv=" minv "maxv=" maxv "total=" total "rn=" rn)
     (loop [order 0
            rvals rebased
            rnum rn]

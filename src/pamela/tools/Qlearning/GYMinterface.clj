@@ -22,40 +22,16 @@
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
-             pamela.tools.Qlearning.DPLinterface)
+            [pamela.tools.Qlearning.DPLinterface :as DPL])
   (:import [pamela.tools.Qlearning.DPLinterface dplinterface])
   (:gen-class))
+
 
 ;(in-ns 'pamela.tools.Qlearning.GYMinterface)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Plant values
 
-(def ^:dynamic *fields* {})
-(def ^:dynamic *debug-fields* false)
-
-(defn print-field-values
-  []
-  (pprint *fields*))
-
-(defn get-field-value
-  [field]
-  (let [value (get *fields* (keyword field))]
-    (if value
-      (deref value)
-      (do (println "field " field "not found in " *fields*)
-          :not-found))))
-
-(def fv get-field-value)
-
-(defn updatefieldvalue
-  [field value]
-  (let [kfield (keyword field)
-        known-field (get *fields* kfield)]
-    (if known-field
-      (reset! known-field value)
-      (def ^:dynamic *fields* (merge *fields* {kfield (atom value)}))))
-  (if *debug-fields* (println "***Set field " field "=" (get *fields* (keyword field)))))
 
 (defn initialize-simulator
   [gym-world routing channel exchange]
@@ -102,20 +78,20 @@
 (defn get-obs-high
   [numobs]
   (case numobs
-    1 [(get-field-value :high0)]
-    2 [(get-field-value :high0) (get-field-value :high1)]
-    3 [(get-field-value :high0) (get-field-value :high1) (get-field-value :high2)]
-    4 [(get-field-value :high0) (get-field-value :high1) (get-field-value :high2) (get-field-value :high3)]
+    1 [(DPL/get-field-value :gml :high0)]
+    2 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1)]
+    3 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1) (DPL/get-field-value :gml :high2)]
+    4 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1) (DPL/get-field-value :gml :high2) (DPL/get-field-value :gml :high3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
 (defn get-obs-low
   [numobs]
   (case numobs
-    1 [(get-field-value :low0)]
-    2 [(get-field-value :low0) (get-field-value :low1)]
-    3 [(get-field-value :low0) (get-field-value :low1) (get-field-value :low2)]
-    4 [(get-field-value :low0) (get-field-value :low1) (get-field-value :low2) (get-field-value :low3)]
+    1 [(DPL/get-field-value :gml :low0)]
+    2 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1)]
+    3 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1) (DPL/get-field-value :gml :low2)]
+    4 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1) (DPL/get-field-value :gml :low2) (DPL/get-field-value :gml :low3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
@@ -125,16 +101,16 @@
     (do (println "numobs (" numobs ")is not a number.  This usually means that you need to restart the plant.")
         (System/exit 0)))
   (case numobs
-    1 [(get-field-value :state0)]
-    2 [(get-field-value :state0) (get-field-value :state1)]
-    3 [(get-field-value :state0) (get-field-value :state1) (get-field-value :state2)]
-    4 [(get-field-value :state0) (get-field-value :state1) (get-field-value :state2) (get-field-value :state3)]
+    1 [(DPL/get-field-value :gml :state0)]
+    2 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1)]
+    3 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1) (DPL/get-field-value :gml :state2)]
+    4 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1) (DPL/get-field-value :gml :state2) (DPL/get-field-value :gml :state3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
 (defn goal-achieved                     ; Open to decide differently
   [state done]
-  (> (first state) (get-field-value :goal_position)))
+  (> (first state) (DPL/get-field-value :gml :goal_position)))
 
 (defn make-gym-interface
   [world-name routing channel exchange]
@@ -157,9 +133,9 @@
                    (fn [self state done]     ; :goal-achieved
                      (goal-achieved state done))
                    (fn [self field]     ; :get-field-value
-                     (get-field-value field))
+                     (DPL/get-field-value :gml field))
                    (fn [self field val] ; :set-field-value
-                     (updatefieldvalue field val))
+                     (DPL/updatefieldvalue :gml field val))
                    (fn [self numobs]    ; :get-current-state
                      (get-current-state numobs)))]
     interface))

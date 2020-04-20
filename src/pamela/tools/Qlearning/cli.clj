@@ -20,6 +20,7 @@
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
             [pamela.tools.Qlearning.DMQL :as dmql]
+            [pamela.tools.Qlearning.DPLinterface :as DPL]
             [pamela.tools.Qlearning.GYMinterface :as gym])
   (:gen-class)) ;; required for uberjar
 
@@ -48,7 +49,7 @@
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
                   ["-z" "--epsilon fr" "Starting value for epsilon exploration 1 >= fr >= 0" :default 1.0 :parse-fn #(Float/parseFloat %)]
-                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1 :parse-fn #(Integer/parseInt %)]
+                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1  :parse-fn #(Integer/parseInt %)]
 
                   ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
@@ -130,7 +131,7 @@
       (cond
         ;; Handle commands from the dispatcher to DMCP directly
         #_(and (= rk dmcpid))     #_(condp = command
-                                 :get-field-value (get-field-value m)
+                                 :get-field-value (DPL/get-field-value :gml m)
                                  ;; :set-field-value (set-field-value m)
                                  (println "Unknown command received: " command m))
 
@@ -141,7 +142,7 @@
                                            value (get anobs :value)]
                                        (cond  field
                                               (do ;;(println "Received " field "=" value)
-                                                  (gym/updatefieldvalue field value))
+                                                  (DPL/updatefieldvalue :gml field value))
                                              :else
                                              (do
                                                (println "Received observation: " anobs))))))
@@ -160,20 +161,20 @@
 
 (def #^{:added "0.1.0"}
   actions
-  "Valid drql command line actions"
+  "Valid dmrl command line actions"
   {"q-learner" (var action-function)
    "demo" (var demo-function)})
 
 (defn usage
-  "Print drql command line help."
+  "Print dmrl command line help."
   {:added "0.1.0"}
   [options-summary]
   (->> (for [a (sort (keys actions))]
          (str "  " a "\t" (:doc (meta (get actions a)))))
     (concat [""
-             "drql"
+             "DOLL Monte-Carlo Reinforcement Learner"
              ""
-             "Usage: drql [options] action"
+             "Usage: dmrl [options] action"
              ""
              "Options:"
              options-summary
@@ -222,6 +223,12 @@
         root (symbol (get-in parsed [:options :root]))
         _ (if (> verbosity 0) (println "DOLL Reinforcement Q-Learner" (:options parsed)))
         ]
+
+    (if help
+      (do
+        (println (usage summary))
+        (System/exit 0)))
+
     ;; RabbitQG
     (def exchange exch)
     (def plantifid (keyword ifid))
@@ -257,8 +264,8 @@
                 ((:initialize-world gym-if) gym-if) ; Startup the simulator
                 (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
                 ;; (gym/print-field-values)
-                (let [numobs  (gym/get-field-value :numobs)
-                      numacts (gym/get-field-value :numacts)]
+                (let [numobs  (DPL/get-field-value :gml :numobs)
+                      numacts (DPL/get-field-value :gml :numacts)]
                   #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                   (let [initial-q-table
                         (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
@@ -295,7 +302,7 @@
       ctag)))
 
 (defn  -main
-  "drql"
+  "dmrl"
   {:added "0.1.0"}
   [& args]
   (apply q-learner args)

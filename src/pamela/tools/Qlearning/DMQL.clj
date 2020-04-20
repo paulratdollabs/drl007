@@ -218,8 +218,14 @@
       ;; Mode 2, Same as above overlaid with epsilon randomization (just for comparison purposes)
       2 (monte-carlo-action-selector all-actions numacts epsilon epsilon mode)
 
+      ;; Mode 3, DOLL Monte-Carlo selection based on a Bayesian model of knowledge with history
+      3 (monte-carlo-action-selector all-actions numacts epsilon 0.0 mode)
+
+      ;; Mode 4, Same as above overlaid with epsilon randomization with history (just for comparison purposes)
+      4 (monte-carlo-action-selector all-actions numacts epsilon epsilon mode)
+
       ;; Compare mode
-      3 (let [tb (textbook-action-selector-with-epsilon-randomization all-actions numacts epsilon)
+      -1 (let [tb (textbook-action-selector-with-epsilon-randomization all-actions numacts epsilon)
               mc (monte-carlo-action-selector all-actions numacts epsilon 0.0 mode)
               aa (map deref all-actions)]
           (def comparisons (+ 1 comparisons))
@@ -234,6 +240,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Training
+
+;;; These are the history preserving modes
+(defn history-preserving
+  [mode]
+  (or (= mode 3) (= mode 4)))
+
+(defn engrave
+  [learner ds history]
+  (if (history-preserving (:mode learner))
+    (cons ds history)
+    history))
 
 (defn run-episode
   "Train a single episode."
@@ -259,7 +276,8 @@
     (loop [current-d-state discstate
            donep false
            ereward 0
-           step 0]
+           step 0
+           history ()]
       ;; (println "state = " discstate)
       (if (not donep)
         (let [;; Select a action
@@ -287,7 +305,7 @@
               (reset! q-pos (+ reward (+ 1 (/ (float episode) max-steps)))) ; was (+ ereward reward)
               (def successes (+ 1 successes))
               (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
-          (recur  new-d-state episode-done (+ ereward reward) (+ step 1)))
+          (recur  new-d-state episode-done (+ ereward reward) (+ step 1) (engrave learner current-d-state history)))
         [ereward step]))))  ; some episodes end early and can lead to incorrect average calculations.
 
 (defn train

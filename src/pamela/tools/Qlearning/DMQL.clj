@@ -247,10 +247,23 @@
   (or (= mode 3) (= mode 4)))
 
 (defn engrave
-  [learner ds history]
+  [learner ds action history]
   (if (history-preserving (:mode learner))
-    (cons ds history)
+    (cons [ds action] history)
     history))
+
+(defn back-propagation-of-reward
+  [initial-reward learner history]
+  (let [{ gamma :gamma } learner]
+    (loop [reward initial-reward
+           hist history]
+      (let [payback (* gamma reward)
+            [ds action] (first hist)
+            q-pos (get-action-quality learner ds action)
+            currentq-val (deref q-pos)
+            rhist (rest hist)]
+        (reset! q-pos (+ currentq-val payback))
+        (if (not (empty? rhist)) (recur payback rhist))))))
 
 (defn run-episode
   "Train a single episode."
@@ -301,11 +314,14 @@
               (reset! q-pos new-q))
 
             ((:goal-achieved platform) platform new-state episode-done)
-            (let [q-pos (get-action-quality learner new-d-state action)]
-              (reset! q-pos (+ reward (+ 1 (/ (float episode) max-steps)))) ; was (+ ereward reward)
+            (let [q-pos (get-action-quality learner new-d-state action)
+                  reward-for-success (+ reward (+ 1 (/ (float episode) max-steps)))]
+              (reset! q-pos reward-for-success) ; was (+ ereward reward)
               (def successes (+ 1 successes))
+              (if (or (= mode 3) (= mode 4)) (back-propagation-of-reward reward-for-success learner history))
               (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
-          (recur  new-d-state episode-done (+ ereward reward) (+ step 1) (engrave learner current-d-state history)))
+          (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
+                  (engrave learner current-d-state action history)))
         [ereward step]))))  ; some episodes end early and can lead to incorrect average calculations.
 
 (defn train
@@ -318,7 +334,7 @@
          q-table  :q-table} learner
         ;;epsilon  0.25
         stats-every 100 ;+++
-        save-every 100 ;+++
+        save-every 100  ;+++
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))

@@ -42,7 +42,7 @@
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
                   ["-x" "--explore f" "Portion of episodes to explore" :default 0.5 :parse-fn #(Float/parseFloat %)]
-                  ["-c" "--cycletime ms" "Cycle time in milliseconds" :default 200 :parse-fn #(Integer/parseInt %)]
+                  ["-c" "--cycletime ms" "Cycle time in milliseconds" :default 0 :parse-fn #(Integer/parseInt %)]
                   ["-q" "--min-q n" "Minimum Q value" :default -2.0  :parse-fn #(Float/parseFloat %)]
                   ["-u" "--max-q n" "Maximum Q value" :default 0.0   :parse-fn #(Float/parseFloat %)]
                   ["-s" "--statedivision n" "Discretization of each state dimension" :default 20  :parse-fn #(Integer/parseInt %)]
@@ -63,8 +63,6 @@
 ;;;plantid: gym, exchange: dmrl, host: localhost, port: 5672
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defonce last-ctag nil)
-
 ;;; Commands
 
 (def rmq-channel nil)
@@ -72,83 +70,10 @@
 (def dmcpid nil)
 (def watchedplant nil)
 (def plantifid nil)
-(def running-activities nil)
-(def timeoutmilliseconds 20000) ; 30 second timeout
 (def tracefilename nil)
 (def exitmainprogram false)
 
-(defn test-for-termination
-  [act]
-  (let [now (System/currentTimeMillis)
-        [plid partid fname ts fn test] act]
-    (if (> (- now ts) timeoutmilliseconds)
-      (do (println "Timed out: " plid partid fname) true)
-      (test))))
-
-(defn finish-activity
-  [act]
-  (let [[plid partid fname ts fn test] act]
-    (println "Finishing " plid partid fname)
-    (fn)))
-
-(defn check-for-satisfied-activities
-  []
-  (let [acts running-activities]
-    (def running-activities nil)
-    (doseq [act acts]
-      (if (test-for-termination act)
-        (finish-activity act)
-        (def running-activities (concat running-activities (list act)))))
-    (if (not (nil? running-activities)) (println "Running-activities = " running-activities))))
-
-(defn add-running-activity
-  [act]
-  (def running-activities (concat running-activities (list act)))
-  (println "Running-activities = " running-activities)
-  (check-for-satisfied-activities))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def received-count 0)
-
-(defn incoming-msgs [_ metadata ^bytes payload]
-  (def received-count (inc received-count))
-  #_(when (zero? (mod received-count 1000))
-    (println "Messages received so far" received-count)
-    )
-  (let [st (String. payload "UTF-8")
-        m (tpn.fromjson/map-from-json-str st)]
-    #_(println "Meta")
-    #_(clojure.pprint/pprint metadata)
-    #_(println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
-    #_(clojure.pprint/pprint m)
-    #_(println "raw-data," (System/currentTimeMillis) "," st)
-    (let [rk (:routing-key metadata)
-          command (keyword (get m :function-name))
-          observations (get m :observations)
-          plantid (get m :plant-id)]
-      (cond
-        ;; Handle commands from the dispatcher to DMCP directly
-        #_(and (= rk dmcpid))     #_(condp = command
-                                 :get-field-value (DPL/get-field-value :gml m)
-                                 ;; :set-field-value (set-field-value m)
-                                 (println "Unknown command received: " command m))
-
-        ;; Handle observations from plant
-        (= rk "observations")    (if (= plantid plantifid)
-                                   (doseq [anobs observations]
-                                     (let [field (get anobs :field)
-                                           value (get anobs :value)]
-                                       (cond  field
-                                              (do ;;(println "Received " field "=" value)
-                                                  (DPL/updatefieldvalue :gml field value))
-                                             :else
-                                             (do
-                                               (println "Received observation: " anobs))))))
-        ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" observations)
-)
-      (check-for-satisfied-activities))))
 
 
 (defn action-function
@@ -235,71 +160,55 @@
     (def watchedplant wpid)
     (def tracefilename trfn)
 
-    (let [connection (rmq/connect {:host host :port port})
-          channel (lch/open connection)
-          _ (le/declare channel ch-name "topic")
-          queue (lq/declare channel)
-          qname (.getQueue queue)
-          _ (lq/bind channel qname ch-name {:routing-key "#"})
-          ctag (lc/subscribe channel qname incoming-msgs {:auto-ack true})]
+    (def rmq-channel (DPL/rabbitMQ-connect host port ch-name plantifid))
 
-      (def rmq-channel channel)
+    (println "RabbitMQ connection Established, plantifid=" plantifid)
 
-      (println "RabbitMQ connection Established, plantifid=" plantifid)
+    (cond (>= (count arguments) 1)
+          (case (keyword (first arguments))
+            :test-connection
+            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange)]
+              ((:initialize-world gym-if) gym-if)
+              ((:reset gym-if) gym-if)
+              ((:perform gym-if) gym-if 0)
+              ((:render gym-if) gym-if))
 
-      (cond (>= (count arguments) 1)
-            (case (keyword (first arguments))
-              :test-connection
-              (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" channel exchange)]
-                ((:initialize-world gym-if) gym-if)
-                ((:reset gym-if) gym-if)
-                ((:perform gym-if) gym-if 0)
-                ((:render gym-if) gym-if))
+            :qlearn
+            ;; Start the learner!
+            (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
+                                     gwld neps mode epsi expl))
+                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange)]
+              ((:initialize-world gym-if) gym-if) ; Startup the simulator
+              (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
+              ;; (gym/print-field-values)
+              (let [numobs  (DPL/get-field-value :gml :numobs)
+                    numacts (DPL/get-field-value :gml :numacts)]
+                #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
+                (let [initial-q-table
+                      (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
+                        (do
+                          (println "Restarting from a prior q-table: " loaq)
+                          (dmql/read-q-table loaq))
+                        (dmql/make-fixed-sized-q-table-uniform-random
+                         numobs ssdi numacts minq maxq))
+                      learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi
+                                                       numobs numacts initial-q-table gym-if)
+                      #_(pprint initial-q-table)]
+                  (dmql/train learner)
+                  (println "Training completed.")
+                  (System/exit 0))))
 
-              :qlearn
-              ;; Start the learner!
-              (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
-                                       gwld neps mode epsi expl))
-                    gym-if  (gym/make-gym-interface (list gwld) "dmrl" channel exchange)]
-                ((:initialize-world gym-if) gym-if) ; Startup the simulator
-                (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
-                ;; (gym/print-field-values)
-                (let [numobs  (DPL/get-field-value :gml :numobs)
-                      numacts (DPL/get-field-value :gml :numacts)]
-                  #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
-                  (let [initial-q-table
-                        (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
-                          (do
-                            (println "Restarting from a prior q-table: " loaq)
-                            (dmql/read-q-table loaq))
-                          (dmql/make-fixed-sized-q-table-uniform-random
-                           numobs ssdi numacts minq maxq))
-                        learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi
-                                                         numobs numacts initial-q-table gym-if)
-                        #_(pprint initial-q-table)]
-                    (dmql/train learner)
-                    (println "Training completed.")
-                    (System/exit 0))))
+            (println "Unknown command: " (first arguments) "try: test-connection or qlearn"))
 
-              (println "Unknown command: " (first arguments) "try: test-connection or qlearn"))
+          :else
+          (do
+            (println "No command specified, try test-connection or qlearn")
+            (System/exit 0)))
 
-            :else
-            (do
-              (println "No command specified, try test-connection or qlearn")
-              (System/exit 0)))
-
-      ;; If no model was specified, we assume that a command will provide the model to load  later.
-      (when last-ctag
-        (mq/cancel-subscription (first last-ctag) (second last-ctag)))
-      ;; conj for list pushes to the front, so we push channel then ctag.
-      ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
-      (def last-ctag (conj last-ctag channel ctag))
-
-      (if-not (nil? tracefilename)
-        (with-open [ostrm (clojure.java.io/writer tracefilename)]
-          (while (not exitmainprogram)
-            (Thread/sleep 1000))))
-      ctag)))
+    (if-not (nil? tracefilename)
+      (with-open [ostrm (clojure.java.io/writer tracefilename)]
+        (while (not exitmainprogram)
+          (Thread/sleep 1000))))))
 
 (defn  -main
   "dmrl"

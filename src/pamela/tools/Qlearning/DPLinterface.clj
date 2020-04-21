@@ -10,6 +10,7 @@
 (ns pamela.tools.Qlearning.DPLinterface
   "DOLL Plant Learning Interface"
   (:require [clojure.string :as string]
+            [clojure.data.json :as json]
             [clojure.repl :refer [pst]]
             [clojure.tools.cli :refer [parse-opts]]
             [clojure.pprint :as pp :refer [pprint]]
@@ -49,35 +50,207 @@
 (def ^:dynamic *objects* {})
 (def ^:dynamic *debug-objects* false)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Blocking remote calls to the plant
+
+(def call-lock (Object.))
+(def running-functions {})
+
+(defn get-call-lock []
+  call-lock)
+
+(defn get-running-functions
+  []
+  running-functions)
+
+(defn function-waiting?
+  [id]
+  (locking call-lock
+    (get running-functions (keyword id))))
+
+(defn function-finished
+  [id val]
+  ;;(println "In Function-call with id=" id "finished with result=" val)
+  (let [apromise (locking call-lock
+                   (let [apromise (get running-functions id)]
+                     (def running-functions (dissoc running-functions id))
+                     apromise))]
+    (if apromise
+      (deliver apromise val)
+      (println "Can't find the function " id "to deliver."))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; (Temporary object implementztion - to be replaced by BSP
+
+(def field-lock (Object.))
+
 (defn print-field-values
   []
   (pprint *objects*))
 
 (defn get-field-value
   [obj field]
-  (let [source (get *objects* (keyword obj))]
-    (if source
-      (let [value (get (deref source) (keyword field))]
-        (if value
-          (deref value)
-          (do (println "field " obj "."  field "not found in " *objects*)
-              :field-not-found)))
-      (do (println "object " obj "not found in " *objects*)
-          :object-not-found))))
+  (locking field-lock
+    (let [source (get *objects* (keyword obj))]
+      (if source
+        (let [value (get (deref source) (keyword field))]
+          (if value
+            (deref value)
+            (do (println "field " obj "."  field "not found in " *objects*)
+                :field-not-found)))
+        (do (println "object " obj "not found in " *objects*)
+            :object-not-found)))))
 
 (defn updatefieldvalue
   [obj field value]
-  (let [kobj (keyword obj)
-        kfield (keyword field)
-        known-source (get *objects* kobj)] ; nil or an atom
-    (if known-source
-      (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
-        (if known-field
-          (reset! known-field value)                ; Source and field known so just set the value.
-          (reset! known-source (merge (deref known-source) { kfield (atom value) })))) ; add new field/value
-      ;; If the source is not known, the object the field and its value must be set
-      (def ^:dynamic *objects* (merge  *objects* { kobj (atom { kfield (atom value) }) })))
-    (if *debug-objects* (println "***Set object" obj "field" field "=" value))))
+  (locking field-lock
+    (let [kobj (keyword obj)
+          kfield (keyword field)
+          known-source (get *objects* kobj)] ; nil or an atom
+      (if known-source
+        (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
+          (if known-field
+            (reset! known-field value)                ; Source and field known so just set the value.
+            (reset! known-source (merge (deref known-source) { kfield (atom value) })))) ; add new field/value
+        ;; If the source is not known, the object the field and its value must be set
+        (def ^:dynamic *objects* (merge  *objects* { kobj (atom { kfield (atom value) }) })))
+      (if *debug-objects* (println "***Set object" obj "field" field "=" value)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; RabbitMQ connectivity
+
+(defonce last-ctag nil)
+(def ctag nil)
+(def received-count 0)
+(def plantifid nil)
+(def running-activities nil)
+(def timeoutmilliseconds 20000) ; 30 second timeout
+(def rmq-channel nil)
+
+(defn set-plantifid
+  [pifid]
+  (def plantifid pifid))
+
+(defn maybe-cancel-subscription
+  [ctag]
+  (when last-ctag
+    (mq/cancel-subscription (first last-ctag) (second last-ctag)))
+  ;; conj for list pushes to the front, so we push channel then ctag.
+  ;; So, we get ctag = (first last-ctag), and channel = (second last-ctag)
+  (def last-ctag (conj last-ctag rmq-channel ctag)))
+
+(defn test-for-termination
+  [act]
+  (let [now (System/currentTimeMillis)
+        [plid partid fname ts fn test] act]
+    (if (> (- now ts) timeoutmilliseconds)
+      (do (println "Timed out: " plid partid fname) true)
+      (test))))
+
+(defn finish-activity
+  [act]
+  (let [[plid partid fname ts fn test] act]
+    (println "Finishing " plid partid fname)
+    (fn)))
+
+(defn check-for-satisfied-activities
+  []
+  (let [acts running-activities]
+    (def running-activities nil)
+    (doseq [act acts]
+      (if (test-for-termination act)
+        (finish-activity act)
+        (def running-activities (concat running-activities (list act)))))
+    (if (not (nil? running-activities)) (println "Running-activities = " running-activities))))
+
+(defn add-running-activity
+  [act]
+  (def running-activities (concat running-activities (list act)))
+  (println "Running-activities = " running-activities)
+  (check-for-satisfied-activities))
+
+(defn incoming-msgs [_ metadata ^bytes payload]
+  (def received-count (inc received-count))
+  #_(when (zero? (mod received-count 1000))
+      (println "Messages received so far" received-count)
+      )
+  (let [st (String. payload "UTF-8")
+        m (json/read-str st)] ; was (json/map-from-json-str st)
+    #_(println st)
+    #_(println "Meta")
+    #_(clojure.pprint/pprint metadata)
+    #_(println "--- from exchange:" (:exchange metadata) ",routing-key:" (:routing-key metadata))
+    #_(clojure.pprint/pprint m)
+    #_(println "raw-data," (System/currentTimeMillis) "," st)
+    (let [rk (:routing-key metadata)
+          command (get m "function-name")
+          observations (get m "observations")
+          plantid (keyword (get m "plant-id"))
+          id (str (get m "id"))
+          state (keyword (get m "state"))]
+      #_(println "rk=" rk "state=" state "plantid=" plantid
+                 "plantifid=" plantifid "observations=" observations)
+      (cond
+        ;; Handle commands from the dispatcher to DMCP directly
+        #_(and (= rk dmcpid))     #_(condp = command
+                                      :get-field-value (get-field-value :gml m)
+                                      ;; :set-field-value (set-field-value m)
+                                      (println "Unknown command received: " command m))
+
+        ;; Handle observations from plant
+        (= rk "observations")
+        (if (= plantid plantifid)
+          (if (= state :finished)
+            ;; A previously called function has returned
+            (function-finished id (get m "reason"))
+            (doseq [anobs observations]
+              (let [field (get anobs "field")
+                    value (get anobs "value")]
+                (cond  field
+                       (do ; (println "Received " field "=" value)
+                         (updatefieldvalue :gml field value))
+                       :else
+                       (do
+                         (println "Received observation: " anobs)))))))
+        ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
+        )
+      (check-for-satisfied-activities))))
+
+(defn rabbitMQ-connect
+  [host port ch-name plantifid]
+  (set-plantifid plantifid)
+  (let [connection (rmq/connect {:host host :port port})
+        channel (lch/open connection)
+        _ (le/declare channel ch-name "topic")
+        queue (lq/declare channel)
+        qname (.getQueue queue)
+        _ (lq/bind channel qname ch-name {:routing-key "#"})
+        lctag (lc/subscribe channel qname incoming-msgs {:auto-ack true})]
+    (maybe-cancel-subscription lctag)
+    (def ctag lctag)
+    (def rmq-channem channel)
+    channel))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Blocking plant call
+
+(def call-counter 10)
+
+(defn bp-call
+  [self pid function args]
+  (let [id (do (locking call-lock
+                 (def call-counter (+ call-counter 1))
+                 (str "dmrl" (str call-counter))))
+        {exchange :exchange routing :routing channel :channel} self
+        finished (promise)]
+    (locking call-lock
+      (def running-functions (merge running-functions {id finished})))
+    (mq/publish-object
+     {:id id
+      :plant-id pid
+      :exchange exchange
+      :function-name function
+      :args args} routing channel exchange)
+    (deref finished)))
 
 ;;; Fin

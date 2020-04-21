@@ -33,46 +33,30 @@
 ;;; Plant values
 
 
+;;; Initialize the plant (robot or simulator)
 (defn initialize-simulator
-  [gym-world routing channel exchange]
-  (mq/publish-object
-   {:id "qlearner" :plant-id "gym" :exchange "dmrl" :function-name "make_env" :args [gym-world]}
-   routing                              ; routing-key
-   channel                              ; channel
-   exchange))                           ; exchange
+  [self gym-world]
+  (DPL/bp-call self "gym" "make_env" [gym-world]))
 
-(defn perform                           ; Invoke the action
-  [action routing channel exchange]
-  (mq/publish-object
-   {:id "qlearner" :plant-id "gym" :exchange "dmrl" :function-name "perform-action" :args [action]}
-   routing                              ; routing-key
-   channel                              ; channel
-   exchange))
+;;; Invoke the action
+(defn perform
+  [self action]
+  (DPL/bp-call self "gym" "perform-action" [action]))
 
-(defn reset                             ; reset the simulator for the next episode
-  [routing channel exchange]
-  (mq/publish-object
-   {:id "qlearner" :plant-id "gym" :exchange "dmrl" :function-name "reset" :args []}
-   routing                              ; routing-key
-   channel                              ; channel
-   exchange))
+;; reset the simulator for the next episode
+(defn reset
+  [self]
+  (DPL/bp-call self "gym" "reset" []))
 
-(defn render                            ; reset the simulator for the next episode
-  [routing channel exchange]
-  (mq/publish-object
-   {:id "qlearner" :plant-id "gym" :exchange "dmrl" :function-name "render" :args []}
-   routing                              ; routing-key
-   channel                              ; channel
-   exchange))
+;; reset the simulator for the next episode
+(defn render
+  [self]
+  (DPL/bp-call self "gym" "render" []))
 
-(defn shutdown                          ; shutdown the simulator.
-  [routing channel exchange]
-  ;; NYI
-  #_(mq/publish-object
-   {:id "qlearner" :plant-id "gym" :exchange "dmrl" :function-name "shutdown" :args []}
-   routing                              ; routing-key
-   channel                              ; channel
-   exchange)
+;;; shutdown the simulator - NYI
+(defn shutdown
+  [self]
+  ;;(DPL/bp-call self "gym" "shutdown" [])
   nil)
 
 (defn get-obs-high
@@ -121,15 +105,11 @@
                    exchange             ; :exchange
                    (fn [self]           ; :initialize-world
                      (initialize-simulator
-                      (first (:world-parameters self)) (:routing self) (:channel self) (:exchange self)))
-                   (fn [self]           ; :shutdown
-                     (shutdown (:routing self) (:channel self) (:exchange self)))
-                   (fn [self action]    ; :perform
-                     (perform action (:routing self) (:channel self) (:exchange self)))
-                   (fn [self]           ; :reset
-                     (reset (:routing self) (:channel self) (:exchange self)))
-                   (fn [self]           ; :render
-                     (render (:routing self) (:channel self) (:exchange self)))
+                      self (first (:world-parameters self))))
+                   (fn [self] (shutdown self))              ; :shutdown
+                   (fn [self action] (perform self action)) ; :perform
+                   (fn [self] (reset self))                 ; :reset
+                   (fn [self] (render self))                ; :render
                    (fn [self state done]     ; :goal-achieved
                      (goal-achieved state done))
                    (fn [self field]     ; :get-field-value

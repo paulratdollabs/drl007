@@ -293,35 +293,35 @@
            history ()]
       ;; (println "state = " discstate)
       (if (not donep)
-        (let [;; Select a action
-              action (select-action learner current-d-state epsilon)
-              _ ((:perform platform) platform action)
-              _ (Thread/sleep 10) ; was cycletime
-              new-state ((:get-current-state platform) platform numobs)
-              reward ((:get-field-value platform) platform :reward)
-              episode-done ((:get-field-value platform) platform :done)
-              new-d-state (get-discrete-state  new-state obslow disc-os-win-size)]
-          (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
-          ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
-          (cond
-            (and (not episode-done) (not (>= step max-steps)))
-            (let [max-future-q (max-atom (get-all-actions-quality learner new-d-state))
-                  q-pos (get-action-quality learner current-d-state action)
-                  current-q (deref q-pos)
-                  ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
-                  ;; Bellman's Equation
-                  new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
-              (reset! q-pos new-q))
+        (let [action (select-action learner current-d-state epsilon)]; Select a action
+          ((:perform platform) platform action)
+          (if (> cycletime 0) (Thread/sleep cycletime))
+          (let [new-state ((:get-current-state platform) platform numobs)
+                reward ((:get-field-value platform) platform :reward)
+                episode-done ((:get-field-value platform) platform :done)
+                new-d-state (get-discrete-state  new-state obslow disc-os-win-size)]
+            (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
+            ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
+            (cond
+              (and (not episode-done) (not (>= step max-steps)))
+              (let [max-future-q (max-atom (get-all-actions-quality learner new-d-state))
+                    q-pos (get-action-quality learner current-d-state action)
+                    current-q (deref q-pos)
+                    ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
+                    ;; Bellman's Equation
+                    new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
+                (reset! q-pos new-q))
 
-            ((:goal-achieved platform) platform new-state episode-done)
-            (let [q-pos (get-action-quality learner new-d-state action)
-                  reward-for-success (+ reward (+ 1 (/ (float episode) max-steps)))]
-              (reset! q-pos reward-for-success) ; was (+ ereward reward)
-              (def successes (+ 1 successes))
-              (if (or (= mode 3) (= mode 4)) (back-propagation-of-reward reward-for-success learner history))
-              (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
-          (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
-                  (engrave learner current-d-state action history)))
+              ((:goal-achieved platform) platform new-state episode-done)
+              (let [q-pos (get-action-quality learner new-d-state action)
+                    reward-for-success (+ reward (+ 1 (/ (float episode) max-steps)))]
+                (reset! q-pos reward-for-success) ; was (+ ereward reward)
+                (def successes (+ 1 successes))
+                (println "*** Success #" successes "on step" step "in" episode "episodes ***")
+                (if (and (or (= mode 3) (= mode 4)) (not (empty? history)))
+                  (back-propagation-of-reward reward-for-success learner history))))
+            (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
+                    (engrave learner current-d-state action history))))
         [ereward step]))))  ; some episodes end early and can lead to incorrect average calculations.
 
 (defn train
@@ -332,7 +332,6 @@
          explore  :explore
          platform :platform
          q-table  :q-table} learner
-        ;;epsilon  0.25
         stats-every 100 ;+++
         save-every 100  ;+++
         start-eps-decay 1
@@ -340,7 +339,7 @@
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))
         maxreward (atom :unset)
         minreward (atom :unset)
-        totalreward (atom :unset)
+        totalreward (atom 0)
         learning-history (atom [])]
     ;;(pprint learner)
     (dotimes [episode episodes]
@@ -348,28 +347,30 @@
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         (if (= 0 (mod eps 10)) (print "*** Starting Episode " episode "Epsilon=" eps "\r"))
         ((:reset platform) platform)
-        (Thread/sleep 10)               ;Reset the platform and give it time to settle down
+        ;; Unneeded (Thread/sleep 10) ;Reset the platform and give it time to settle down
         (let [[reward steps] (run-episode learner episode eps)]
           (if (= 0 (mod episode stats-every))
-            (do (if (> episode 0)
-                  (do
-                    (println "Episode=" episode
-                             "Epsilon=" eps
-                             "Max reward=" (deref maxreward)
-                             "Average reward=" (/ (deref totalreward) stats-every)
-                             "Min reward=" (deref minreward))
-                    (reset! learning-history (conj (deref learning-history)
-                                                   {:episode episode
-                                                    :max-reward (deref maxreward)
-                                                    :min-reward (deref minreward)
-                                                    :average-reward (/ (deref totalreward) stats-every)}))
-                    (println "Saved statistics as: " ; maybe write as CSV file?
-                             (save-statistics (deref learning-history) episode "DMQL"))))
-                ;; The first result of each set sets the starting values.
-                (reset! maxreward reward)
-                (reset! minreward reward)
-                (reset! totalreward reward))
             (do
+              (if (> episode 0)
+                (println "Episode=" episode
+                         "Epsilon=" eps
+                         "Steps=" steps
+                         "Max reward=" (deref maxreward)
+                         "Average reward=" (/ (deref totalreward) stats-every)
+                         "Min reward=" (deref minreward)))
+              (reset! learning-history (conj (deref learning-history)
+                                             {:episode episode
+                                              :max-reward (deref maxreward)
+                                              :min-reward (deref minreward)
+                                              :average-reward (/ (deref totalreward) stats-every)}))
+              (println "Saved statistics as: " ; maybe write as CSV file?
+                       (save-statistics (deref learning-history) episode "DMQL"))
+              ;; The first result of each set sets the starting values.
+              (reset! maxreward reward)
+              (reset! minreward reward)
+              (reset! totalreward reward))
+            (do
+              ;;(println "reward=" reward "maxreward=" maxreward "minreward=" minreward)
               (if (> reward (deref maxreward)) (reset! maxreward reward))
               (if (> (deref minreward) reward) (reset! minreward reward))
               (reset! totalreward (+ (deref totalreward) reward))))

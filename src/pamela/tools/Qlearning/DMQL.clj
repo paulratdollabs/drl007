@@ -292,7 +292,7 @@
            step 0
            history ()]
       ;; (println "state = " discstate)
-      (if (not donep)
+      (if (and (not donep) (not (>= step max-steps)))
         (let [action (select-action learner current-d-state epsilon)]; Select a action
           ((:perform platform) platform action)
           (if (> cycletime 0) (Thread/sleep cycletime))

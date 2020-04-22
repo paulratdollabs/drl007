@@ -90,6 +90,7 @@
 
 (defn get-field-value
   [obj field]
+  #_(println "Looking for " obj "." field)
   (locking field-lock
     (let [source (get *objects* (keyword obj))]
       (if source
@@ -98,11 +99,12 @@
             (deref value)
             (do (println "field " obj "."  field "not found in " *objects*)
                 :field-not-found)))
-        (do (println "object " obj "not found in " *objects*)
+        (do (println "object " obj "not found in " *objects* "while looking for field " field)
             :object-not-found)))))
 
 (defn updatefieldvalue
   [obj field value]
+  #_(println "Setting " obj "." field "=" value)
   (locking field-lock
     (let [kobj (keyword obj)
           kfield (keyword field)
@@ -188,33 +190,35 @@
           plantid (keyword (get m "plant-id"))
           id (str (get m "id"))
           state (keyword (get m "state"))]
-      #_(println "rk=" rk "state=" state "plantid=" plantid
-                 "plantifid=" plantifid "observations=" observations)
+      #_(println "rk=" rk "state=" state "plantid=" plantid "plantifid=" plantifid "observations=" observations)
       (cond
         ;; Handle commands from the dispatcher to DMCP directly
         #_(and (= rk dmcpid))     #_(condp = command
-                                      :get-field-value (get-field-value :gml m)
+                                      :get-field-value (get-field-value :gym m)
                                       ;; :set-field-value (set-field-value m)
                                       (println "Unknown command received: " command m))
 
         ;; Handle observations from plant
         (= rk "observations")
-        (if (= plantid plantifid)
-          (if (= state :finished)
-            ;; A previously called function has returned
-            (function-finished id (get m "reason"))
+        (if true #_(= plantid plantifid)
+          (do
+            (if (= state :finished)
+              ;; A previously called function has returned
+              (do #_(println "Activity " id "finished with: " (get m "reason"))
+                  (function-finished id (get m "reason"))))
             (doseq [anobs observations]
+              #_(println "Look at obs=" anobs)
               (let [field (get anobs "field")
                     value (get anobs "value")]
                 (cond  field
-                       (do ; (println "Received " field "=" value)
-                         (updatefieldvalue :gml field value))
+                       (do #_(println "Received " plantid "." field "=" value)
+                           (updatefieldvalue plantid field value))
                        :else
                        (do
-                         (println "Received observation: " anobs)))))))
-        ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
-        )
-      (check-for-satisfied-activities))))
+                         (println "Received observation: " anobs))))))))
+      ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
+      )
+    (check-for-satisfied-activities)))
 
 (defn rabbitMQ-connect
   [host port ch-name plantifid]

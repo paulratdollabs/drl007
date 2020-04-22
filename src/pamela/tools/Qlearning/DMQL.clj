@@ -19,8 +19,7 @@
             [clojure.core :as cc]
             [clojure.edn :as edn]
             [clojure.math.numeric-tower :as math]
-            [environ.core :refer [env]]
-            [pamela.tools.Qlearning.GYMinterface :as gym])
+            [environ.core :refer [env]])
   (:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)
@@ -50,7 +49,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Q-Table representation
 
-(defn make-fixed-sized-q-table-uniform-random
+(defn make-fixed-sized-q-table-uniform-random-aux
   "Q-table constructor that fills the q-table with random values."
   [num-state-variables discretization num-actions low high]
   (if (= num-state-variables 0)
@@ -58,8 +57,15 @@
                             (fn [] (atom
                                     (+ low (* (- high low)(rand))))))))
     (vec (doall (repeatedly discretization
-                            (fn [] (make-fixed-sized-q-table-uniform-random
+                            (fn [] (make-fixed-sized-q-table-uniform-random-aux
                                     (- num-state-variables 1) discretization num-actions low high)))))))
+
+(defn make-fixed-sized-q-table-uniform-random
+  "Q-table constructor that fills the q-table with random values."
+  [numobs discretization num-actions low high obslow disc-os-win-size]
+  {:storage (make-fixed-sized-q-table-uniform-random-aux numobs discretization num-actions low high)
+   :obslow obslow
+   :disc-os-win-size disc-os-win-size})
 
 (defn fixed-sized-q-value
   "Helper function for q-table indexing."
@@ -68,44 +74,59 @@
 
 (defn get-all-actions-quality
   [learner d-state]
-  (apply fixed-sized-q-value (deref (:q-table learner)) d-state))
+  (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state))
 
 (defn get-action-quality
   "Return the atom representing the Q value for the given action in the given discretized state."
   [learner d-state action]
-  (fixed-sized-q-value (apply fixed-sized-q-value (deref (:q-table learner)) d-state) action))
+  (fixed-sized-q-value (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state) action))
 
 (defn deatomize-q-table
-  [qtable]
+  [qtable-storage]
   ;;(println "In deatomize-q-table with: " qtable)
-  (cond (coll? qtable)
-        (vec (doall (map deatomize-q-table qtable)))
+  (cond
+    (map? qtable-storage)
+    (into {} (map (fn [[a b]] {a (deatomize-q-table b)}) qtable-storage))
 
-        (= (type qtable) (type (atom 42)))
-        (deref qtable)
+    (coll? qtable-storage)
+        (vec (doall (map deatomize-q-table qtable-storage)))
 
-        :otherwise qtable))
+        (= (type qtable-storage) (type (atom 42)))
+        (deref qtable-storage)
+
+        :otherwise qtable-storage))
 
 (defn save-q-table
   "Save the supplied Q-Table using a filename that includes the episode number."
   [q-table episode name]
-  (let [fn (str name episode "-q-table.edn")]
+  (let [fn (str name episode "-q-table.edn")
+        {storage :storage obslow :obslow disc-os-win-size :disc-os-win-size} (deref q-table)]
     (with-open [w (io/writer fn)]
       (binding [*out* w]
         (println ";;; Readable EDN Q-Table after episode " episode)
-        (pr (deatomize-q-table q-table))))
+        (pr {:obslow obslow :disc-os-win-size disc-os-win-size :storage (deatomize-q-table storage)})))
     fn))
 
 (defn reatomize-q-table
-  [qtable]
+  [qtable-storage]
   ;;(println "In deatomize-q-table with: " qtable)
-  (cond (coll? qtable)
-        (vec (doall (map reatomize-q-table qtable)))
+  (cond
+    (map? qtable-storage)
+    (let [{obslow :obslow
+           disc-os-win-size :disc-os-win-size
+           storage :storage} qtable-storage]
+      {:obslow obslow
+       :disc-os-win-size disc-os-win-size
+       :storage (reatomize-q-table storage)})
+    ;; (into {} (map (fn [[a b]] {a (reatomize-q-table b)}) qtable-storage))
 
-        (number? qtable)
-        (atom qtable)
+    (coll? qtable-storage)
+    (vec (doall (map reatomize-q-table qtable-storage)))
 
-        :otherwise qtable))
+    (number? qtable-storage)
+    (atom qtable-storage)
+
+    :otherwise qtable-storage))
 
 (defn read-q-table
   "Read a Q-Table previously written out in EDN format;"
@@ -116,24 +137,6 @@
 ;;; (def test-q-table (make-fixed-sized-q-table-uniform-random 2 3 2 -2 0))
 ;;; (pprint (make-fixed-sized-q-table-uniform-random 2 3 2 -2 0))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; State space discretization
-
-(defn win-size
-  "Compute the vector of window sizes for each state variable according to the discretization factor."
-  [numobs ssdi]
-  (vec (map (fn [high low] (/ (- high low) ssdi)) (gym/get-obs-high numobs) (gym/get-obs-low numobs))))
-
-(defn get-discrete-state
-  "Given a raw state, discretize the state."
-  [state obslow disc-os-win-size]
-  ;; (println "state=" state "low=" obslow "win=" disc-os-win-size)
-  (let [discstate (vec
-                   (doall
-                    (map (fn [state low winsize] (int (/ (- state low) winsize)))
-                         state obslow disc-os-win-size)))]
-    ;; (println "discstate=" discstate)
-    discstate))
 
 (defn max-atom
   "Given a list of Q-table entries representing, in order, the available actions, select the greatest quality."
@@ -204,6 +207,7 @@
 (defn select-action
   "Select an action using algorithm selected by --mode."
   [learner dstate epsilon]
+  ;;(println "learner=" learner "dstate=" dstate)
   (let [{q-table :q-table
          mode    :mode
          numacts :numacts} learner
@@ -270,7 +274,7 @@
   [learner episode epsilon]
   (let [{;; Pull out all of the pieces aheadof the loop
          mode      :mode
-         qt        :q-table
+         q-table   :q-table
          cycletime :cycletime
          max-steps :max-steps
          alpha     :alpha
@@ -278,14 +282,10 @@
          ssdi      :discretization
          numobs    :numobs
          numacts   :numacts
+         statedisc :state-discretizer
          platform  :platform} learner
-        q-table (deref qt)
         current-state ((:get-current-state platform) platform numobs)
-        obslow (gym/get-obs-low numobs)
-        disc-os-size (vec (repeatedly numobs (fn [] ssdi)))
-        disc-os-win-size (win-size numobs ssdi)
-        discstate (get-discrete-state current-state obslow disc-os-win-size)
-        ]
+        discstate ((:get-discrete-state platform) learner current-state)]
     (loop [current-d-state discstate
            donep false
            ereward 0
@@ -299,7 +299,7 @@
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform :reward)
                 episode-done ((:get-field-value platform) platform :done)
-                new-d-state (get-discrete-state  new-state obslow disc-os-win-size)]
+                new-d-state ((:get-discrete-state platform) learner new-state)]
             (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
             (cond
@@ -375,6 +375,6 @@
               (if (> (deref minreward) reward) (reset! minreward reward))
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
-            (println "Saved Q Table as: " (save-q-table (deref q-table) episode "DMQL"))))))))
+            (println "Saved Q Table as: " (save-q-table q-table episode "DMQL"))))))))
 
 ;;; Fin

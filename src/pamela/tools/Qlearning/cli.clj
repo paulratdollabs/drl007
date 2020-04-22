@@ -190,7 +190,8 @@
                           (println "Restarting from a prior q-table: " loaq)
                           (dmql/read-q-table loaq))
                         (dmql/make-fixed-sized-q-table-uniform-random
-                         numobs ssdi numacts minq maxq))
+                         numobs ssdi numacts minq maxq (gym/get-obs-low numobs) (gym/win-size numobs ssdi)))
+
                       learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi
                                                        numobs numacts initial-q-table gym-if)
                       #_(pprint initial-q-table)]

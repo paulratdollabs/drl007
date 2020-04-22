@@ -96,6 +96,26 @@
   [state done]
   (> (first state) (DPL/get-field-value :gml :goal_position)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; State space discretization
+
+(defn win-size
+  "Compute the vector of window sizes for each state variable according to the discretization factor."
+  [numobs ssdi]
+  (vec (map (fn [high low] (/ (- high low) ssdi)) (get-obs-high numobs) (get-obs-low numobs))))
+
+(defn get-discrete-state
+  [learner state]
+  (let [{obslow :obslow
+         disc-os-win-size :disc-os-win-size} (deref (:q-table learner))]
+    ;;(println "state=" state "low=" obslow "win=" disc-os-win-size)
+    (let [discstate (vec
+                     (doall
+                      (map (fn [state low winsize] (int (/ (- state low) winsize)))
+                           state obslow disc-os-win-size)))]
+       ;;(println "discstate=" discstate)
+      discstate)))
+
 (defn make-gym-interface
   [world-name routing channel exchange]
   (let [interface (dplinterface.        ; dpl/make-dpl-interface
@@ -110,8 +130,10 @@
                    (fn [self action] (perform self action)) ; :perform
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
-                   (fn [self state done]     ; :goal-achieved
+                   (fn [self state done]; :goal-achieved
                      (goal-achieved state done))
+                   (fn [learner state]     ; :get-discrete-state
+                     (get-discrete-state learner state))
                    (fn [self field]     ; :get-field-value
                      (DPL/get-field-value :gml field))
                    (fn [self field val] ; :set-field-value

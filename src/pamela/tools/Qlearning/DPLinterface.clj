@@ -202,19 +202,19 @@
         (if (= plantid plantifid)
           (if (= state :finished)
             ;; A previously called function has returned
-            (function-finished id (get m "reason"))
-            (doseq [anobs observations]
-              (let [field (get anobs "field")
-                    value (get anobs "value")]
-                (cond  field
-                       (do ; (println "Received " field "=" value)
-                         (updatefieldvalue :gml field value))
-                       :else
-                       (do
-                         (println "Received observation: " anobs)))))))
-        ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
-        )
-      (check-for-satisfied-activities))))
+            (function-finished id (get m "reason")))
+          (doseq [anobs observations]
+            (let [field (get anobs "field")
+                  value (get anobs "value")]
+              (cond  field
+                     (do ; (println "Received " field "=" value)
+                       (updatefieldvalue plantid field value))
+                     :else
+                     (do
+                       (println "Received observation: " anobs)))))))
+      ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
+      )
+    (check-for-satisfied-activities)))
 
 (defn rabbitMQ-connect
   [host port ch-name plantifid]

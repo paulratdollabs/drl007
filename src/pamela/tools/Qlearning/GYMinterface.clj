@@ -135,9 +135,9 @@
                    (fn [learner state]     ; :get-discrete-state
                      (get-discrete-state learner state))
                    (fn [self field]     ; :get-field-value
-                     (DPL/get-field-value :gml field))
+                     (DPL/get-field-value :gym field))
                    (fn [self field val] ; :set-field-value
-                     (DPL/updatefieldvalue :gml field val))
+                     (DPL/updatefieldvalue :gym field val))
                    (fn [self numobs]    ; :get-current-state
                      (get-current-state numobs)))]
     interface))

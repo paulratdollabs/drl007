@@ -98,7 +98,7 @@
             (deref value)
             (do (println "field " obj "."  field "not found in " *objects*)
                 :field-not-found)))
-        (do (println "object " obj "not found in " *objects*)
+        (do (println "object " obj "not found in " *objects* "while looking for field " field)
             :object-not-found)))))
 
 (defn updatefieldvalue
@@ -188,7 +188,7 @@
           plantid (keyword (get m "plant-id"))
           id (str (get m "id"))
           state (keyword (get m "state"))]
-      #_(println "rk=" rk "state=" state "plantid=" plantid
+      (println "rk=" rk "state=" state "plantid=" plantid
                  "plantifid=" plantifid "observations=" observations)
       (cond
         ;; Handle commands from the dispatcher to DMCP directly
@@ -207,8 +207,8 @@
             (let [field (get anobs "field")
                   value (get anobs "value")]
               (cond  field
-                     (do ; (println "Received " field "=" value)
-                       (updatefieldvalue plantid field value))
+                     (do (println "Received " field "=" value)
+                         (updatefieldvalue plantid field value))
                      :else
                      (do
                        (println "Received observation: " anobs)))))))

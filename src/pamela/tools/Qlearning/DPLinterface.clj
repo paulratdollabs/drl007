@@ -193,7 +193,7 @@
       (cond
         ;; Handle commands from the dispatcher to DMCP directly
         #_(and (= rk dmcpid))     #_(condp = command
-                                      :get-field-value (get-field-value :gml m)
+                                      :get-field-value (get-field-value :gym m)
                                       ;; :set-field-value (set-field-value m)
                                       (println "Unknown command received: " command m))
 

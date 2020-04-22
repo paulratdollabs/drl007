@@ -177,7 +177,7 @@
             ;; Start the learner!
             (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
                                      gwld neps mode epsi expl))
-                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange)]
+                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym)]
               ((:initialize-world gym-if) gym-if) ; Startup the simulator
               (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
               ;; (gym/print-field-values)

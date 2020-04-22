@@ -297,8 +297,8 @@
           ((:perform platform) platform action)
           (if (> cycletime 0) (Thread/sleep cycletime))
           (let [new-state ((:get-current-state platform) platform numobs)
-                reward ((:get-field-value platform) platform :reward)
-                episode-done ((:get-field-value platform) platform :done)
+                reward ((:get-field-value platform) platform (:plant-id platform) :reward)
+                episode-done ((:get-field-value platform) platform (:plant-id platform) :done)
                 new-d-state ((:get-discrete-state platform) learner new-state)]
             (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)

@@ -117,12 +117,13 @@
       discstate)))
 
 (defn make-gym-interface
-  [world-name routing channel exchange]
+  [world-name routing channel exchange plantid]
   (let [interface (dplinterface.        ; dpl/make-dpl-interface
                    world-name           ; :world-parameters
                    routing              ; :routing
                    channel              ; :channel
                    exchange             ; :exchange
+                   plantid              ; :plantid
                    (fn [self]           ; :initialize-world
                      (initialize-simulator
                       self (first (:world-parameters self))))

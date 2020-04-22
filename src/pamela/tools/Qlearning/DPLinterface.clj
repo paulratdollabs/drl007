@@ -33,7 +33,7 @@
 (defrecord dplinterface [;; World-specific parameters
                          world-parameters ; a list of arguments
                          ;; RabbitMQ information
-                         routing channel exchange
+                         routing channel exchange plantid
                          ;; Control of the simulator/plant
                          initialize-world shutdown
                          ;; Actions to be performed on the simulator

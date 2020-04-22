@@ -62,20 +62,20 @@
 (defn get-obs-high
   [numobs]
   (case numobs
-    1 [(DPL/get-field-value :gml :high0)]
-    2 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1)]
-    3 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1) (DPL/get-field-value :gml :high2)]
-    4 [(DPL/get-field-value :gml :high0) (DPL/get-field-value :gml :high1) (DPL/get-field-value :gml :high2) (DPL/get-field-value :gml :high3)]
+    1 [(DPL/get-field-value :gym :high0)]
+    2 [(DPL/get-field-value :gym :high0) (DPL/get-field-value :gym :high1)]
+    3 [(DPL/get-field-value :gym :high0) (DPL/get-field-value :gym :high1) (DPL/get-field-value :gym :high2)]
+    4 [(DPL/get-field-value :gym :high0) (DPL/get-field-value :gym :high1) (DPL/get-field-value :gym :high2) (DPL/get-field-value :gym :high3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
 (defn get-obs-low
   [numobs]
   (case numobs
-    1 [(DPL/get-field-value :gml :low0)]
-    2 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1)]
-    3 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1) (DPL/get-field-value :gml :low2)]
-    4 [(DPL/get-field-value :gml :low0) (DPL/get-field-value :gml :low1) (DPL/get-field-value :gml :low2) (DPL/get-field-value :gml :low3)]
+    1 [(DPL/get-field-value :gym :low0)]
+    2 [(DPL/get-field-value :gym :low0) (DPL/get-field-value :gym :low1)]
+    3 [(DPL/get-field-value :gym :low0) (DPL/get-field-value :gym :low1) (DPL/get-field-value :gym :low2)]
+    4 [(DPL/get-field-value :gym :low0) (DPL/get-field-value :gym :low1) (DPL/get-field-value :gym :low2) (DPL/get-field-value :gym :low3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
@@ -85,16 +85,16 @@
     (do (println "numobs (" numobs ")is not a number.  This usually means that you need to restart the plant.")
         (System/exit 0)))
   (case numobs
-    1 [(DPL/get-field-value :gml :state0)]
-    2 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1)]
-    3 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1) (DPL/get-field-value :gml :state2)]
-    4 [(DPL/get-field-value :gml :state0) (DPL/get-field-value :gml :state1) (DPL/get-field-value :gml :state2) (DPL/get-field-value :gml :state3)]
+    1 [(DPL/get-field-value :gym :state0)]
+    2 [(DPL/get-field-value :gym :state0) (DPL/get-field-value :gym :state1)]
+    3 [(DPL/get-field-value :gym :state0) (DPL/get-field-value :gym :state1) (DPL/get-field-value :gym :state2)]
+    4 [(DPL/get-field-value :gym :state0) (DPL/get-field-value :gym :state1) (DPL/get-field-value :gym :state2) (DPL/get-field-value :gym :state3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
 (defn goal-achieved                     ; Open to decide differently
   [state done]
-  (> (first state) (DPL/get-field-value :gml :goal_position)))
+  (> (first state) (DPL/get-field-value :gym :goal_position)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; State space discretization
@@ -135,9 +135,9 @@
                    (fn [learner state]     ; :get-discrete-state
                      (get-discrete-state learner state))
                    (fn [self field]     ; :get-field-value
-                     (DPL/get-field-value :gml field))
+                     (DPL/get-field-value :gym field))
                    (fn [self field val] ; :set-field-value
-                     (DPL/updatefieldvalue :gml field val))
+                     (DPL/updatefieldvalue :gym field val))
                    (fn [self numobs]    ; :get-current-state
                      (get-current-state numobs)))]
     interface))

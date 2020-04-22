@@ -296,6 +296,7 @@
         (let [action (select-action learner current-d-state epsilon)]; Select a action
           ((:perform platform) platform action)
           (if (> cycletime 0) (Thread/sleep cycletime))
+          #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
                 episode-done ((:get-field-value platform) platform (:plantid platform) :done)

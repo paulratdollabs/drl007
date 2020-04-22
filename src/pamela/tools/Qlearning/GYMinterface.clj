@@ -135,10 +135,10 @@
                      (goal-achieved state done))
                    (fn [learner state]     ; :get-discrete-state
                      (get-discrete-state learner state))
-                   (fn [self field]     ; :get-field-value
-                     (DPL/get-field-value :gym field))
-                   (fn [self field val] ; :set-field-value
-                     (DPL/updatefieldvalue :gym field val))
+                   (fn [self obj field]     ; :get-field-value
+                     (DPL/get-field-value obj field))
+                   (fn [self obj field val] ; :set-field-value
+                     (DPL/updatefieldvalue obj field val))
                    (fn [self numobs]    ; :get-current-state
                      (get-current-state numobs)))]
     interface))

@@ -63,17 +63,38 @@
 (defn make-fixed-sized-q-table-uniform-random
   "Q-table constructor that fills the q-table with random values."
   [numobs discretization num-actions low high obslow disc-os-win-size]
+  ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions "low="low "high=" high)
   {:storage (make-fixed-sized-q-table-uniform-random-aux numobs discretization num-actions low high)
    :obslow obslow
    :disc-os-win-size disc-os-win-size})
 
+(defn table-size-aux
+  [storage size]
+  (if (not (coll? storage))
+    size
+    (table-size-aux (first storage) (conj size (count storage)))))
+
+(defn table-size
+  [storage]
+  (table-size-aux storage []))
+
+(defn q-table-size
+  [qt]
+  (table-size (:storage qt)))
+
 (defn fixed-sized-q-value
   "Helper function for q-table indexing."
   [q-table & args]
+  ;;(println "In fixed-sized-q-value, args=" args "qt dimensions=" (q-table-size q-table))
+  ;;;(try
   (reduce nth q-table args))
+  ;;;   (catch Exception e ( "caught exception: " (.getMessage e)))
+  ;;;   (finally (println "In fixed-sized-q-value (DMQL.clj), q-table size=" (q-table-size q-table) "indices=" args)
+  ;;;            (System/exit 0))))
 
 (defn get-all-actions-quality
   [learner d-state]
+  ;;(println "In get-all-actions-quality, d-state=" d-state "qt dimensions=" (q-table-size (deref (:q-table learner))))
   (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state))
 
 (defn get-action-quality
@@ -346,7 +367,8 @@
     (dotimes [episode episodes]
       ;; Setup the simulator
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
-        (if (= 0 (mod eps 10)) (print "*** Starting Episode " episode "Epsilon=" eps "\r"))
+        #_(if (= 0 (mod episode 10))
+          (println "*** Starting Episode " episode "Epsilon=" eps "Q-table size=" (q-table-size (deref q-table))"\r"))
         ((:reset platform) platform)
         ;; Unneeded (Thread/sleep 10) ;Reset the platform and give it time to settle down
         (let [[reward steps] (run-episode learner episode eps)]

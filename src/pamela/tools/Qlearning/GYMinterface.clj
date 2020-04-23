@@ -104,7 +104,7 @@
   [numobs ssdi]
   (vec (map (fn [high low] (/ (- high low) ssdi)) (get-obs-high numobs) (get-obs-low numobs))))
 
-(defn get-discrete-state
+#_(defn get-discrete-state
   [learner state]
   (let [{obslow :obslow
          disc-os-win-size :disc-os-win-size} (deref (:q-table learner))]
@@ -112,6 +112,19 @@
     (let [discstate (vec
                      (doall
                       (map (fn [state low winsize] (int (/ (- state low) winsize)))
+                           state obslow disc-os-win-size)))]
+       ;;(println "discstate=" discstate)
+      discstate)))
+
+(defn get-discrete-state
+  [learner state]
+  (let [{obslow :obslow
+         disc-os-win-size :disc-os-win-size} (deref (:q-table learner))
+        {numobs :numobs} learner]
+    ;;(println "state=" state "low=" obslow "win=" disc-os-win-size)
+    (let [discstate (vec
+                     (doall
+                      (map (fn [state low winsize] (max 0 (min (int (/ (- state low) winsize)) (- numobs 1))))
                            state obslow disc-os-win-size)))]
        ;;(println "discstate=" discstate)
       discstate)))

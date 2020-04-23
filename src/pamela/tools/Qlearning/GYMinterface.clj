@@ -104,7 +104,7 @@
   [numobs ssdi]
   (vec (map (fn [high low] (/ (- high low) ssdi)) (get-obs-high numobs) (get-obs-low numobs))))
 
-#_(defn get-discrete-state
+(defn get-discrete-state
   [learner state]
   (let [{obslow :obslow
          disc-os-win-size :disc-os-win-size} (deref (:q-table learner))]
@@ -116,7 +116,7 @@
        ;;(println "discstate=" discstate)
       discstate)))
 
-(defn get-discrete-state
+#_(defn get-discrete-state
   [learner state]
   (let [{obslow :obslow
          disc-os-win-size :disc-os-win-size} (deref (:q-table learner))

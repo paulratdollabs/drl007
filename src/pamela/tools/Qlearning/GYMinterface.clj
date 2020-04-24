@@ -106,25 +106,17 @@
 
 (defn get-discrete-state
   [learner state]
-  (let [{obslow :obslow
-         disc-os-win-size :disc-os-win-size} (deref (:q-table learner))]
+  (let [{q-table :q-table
+         discretization :discretization} learner
+        {obslow :obslow
+         disc-os-win-size :disc-os-win-size} (deref q-table)]
     ;;(println "state=" state "low=" obslow "win=" disc-os-win-size)
     (let [discstate (vec
                      (doall
-                      (map (fn [state low winsize] (int (/ (- state low) winsize)))
-                           state obslow disc-os-win-size)))]
-       ;;(println "discstate=" discstate)
-      discstate)))
-
-#_(defn get-discrete-state
-  [learner state]
-  (let [{obslow :obslow
-         disc-os-win-size :disc-os-win-size} (deref (:q-table learner))
-        {numobs :numobs} learner]
-    ;;(println "state=" state "low=" obslow "win=" disc-os-win-size)
-    (let [discstate (vec
-                     (doall
-                      (map (fn [state low winsize] (max 0 (min (int (/ (- state low) winsize)) (- numobs 1))))
+                      (map (fn [state low winsize]
+                             (max 0
+                                  (min (int (/ (- state low) winsize))
+                                       (- discretization 1))))
                            state obslow disc-os-win-size)))]
        ;;(println "discstate=" discstate)
       discstate)))

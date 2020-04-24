@@ -309,8 +309,8 @@
         discstate ((:get-discrete-state platform) learner current-state)]
     (loop [current-d-state discstate
            donep false
-           ereward 0
-           step 0
+           ereward 0.0
+           step 0.0
            history ()]
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
@@ -336,7 +336,7 @@
 
               ((:goal-achieved platform) platform new-state episode-done)
               (let [q-pos (get-action-quality learner new-d-state action)
-                    reward-for-success (+ reward (+ 1 (/ (float episode) max-steps)))]
+                    reward-for-success (+ reward (* 0.5 (/ (- max-steps step) max-steps)))]
                 (reset! q-pos reward-for-success) ; was (+ ereward reward)
                 (def successes (+ 1 successes))
                 (println "*** Success #" successes "on step" step "in" episode "episodes ***")

@@ -19,6 +19,7 @@
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
             [tpn.fromjson :as fromjson]
+            [pamela.tools.Qlearning.Qtables :as qtbl]
             [pamela.tools.Qlearning.DMQL :as dmql]
             [pamela.tools.Qlearning.DPLinterface :as DPL]
             [pamela.tools.Qlearning.GYMinterface :as gym])
@@ -188,8 +189,8 @@
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
                         (do
                           (println "Restarting from a prior q-table: " loaq)
-                          (dmql/read-q-table loaq))
-                        (dmql/make-fixed-sized-q-table-uniform-random
+                          (qtbl/read-q-table loaq))
+                        (qtbl/make-fixed-sized-q-table-uniform-random
                          numobs ssdi numacts minq maxq (gym/get-obs-low numobs) (gym/win-size numobs ssdi)))
 
                       learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi

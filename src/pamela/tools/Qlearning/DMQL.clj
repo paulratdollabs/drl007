@@ -19,7 +19,8 @@
             [clojure.core :as cc]
             [clojure.edn :as edn]
             [clojure.math.numeric-tower :as math]
-            [environ.core :refer [env]])
+            [environ.core :refer [env]]
+            [pamela.tools.Qlearning.Qtables :as qtbl])
   (:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)
@@ -45,125 +46,6 @@
    :numacts numacts
    :platform platform
    })
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Q-Table representation
-
-(defn make-fixed-sized-q-table-uniform-random-aux
-  "Q-table constructor that fills the q-table with random values."
-  [num-state-variables discretization num-actions low high]
-  (if (= num-state-variables 0)
-    (vec (doall (repeatedly num-actions
-                            (fn [] (atom
-                                    (+ low (* (- high low)(rand))))))))
-    (vec (doall (repeatedly discretization
-                            (fn [] (make-fixed-sized-q-table-uniform-random-aux
-                                    (- num-state-variables 1) discretization num-actions low high)))))))
-
-(defn make-fixed-sized-q-table-uniform-random
-  "Q-table constructor that fills the q-table with random values."
-  [numobs discretization num-actions low high obslow disc-os-win-size]
-  ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions "low="low "high=" high)
-  {:storage (make-fixed-sized-q-table-uniform-random-aux numobs discretization num-actions low high)
-   :obslow obslow
-   :disc-os-win-size disc-os-win-size})
-
-(defn table-size-aux
-  [storage size]
-  (if (not (coll? storage))
-    size
-    (table-size-aux (first storage) (conj size (count storage)))))
-
-(defn table-size
-  [storage]
-  (table-size-aux storage []))
-
-(defn q-table-size
-  [qt]
-  (table-size (:storage qt)))
-
-(defn fixed-sized-q-value
-  "Helper function for q-table indexing."
-  [q-table & args]
-  ;;(println "In fixed-sized-q-value, args=" args "qt dimensions=" (q-table-size q-table))
-  ;;;(try
-  (reduce nth q-table args))
-  ;;;   (catch Exception e ( "caught exception: " (.getMessage e)))
-  ;;;   (finally (println "In fixed-sized-q-value (DMQL.clj), q-table size=" (q-table-size q-table) "indices=" args)
-  ;;;            (System/exit 0))))
-
-(defn get-all-actions-quality
-  [learner d-state]
-  ;;(println "In get-all-actions-quality, d-state=" d-state "qt dimensions=" (q-table-size (deref (:q-table learner))))
-  (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state))
-
-(defn get-action-quality
-  "Return the atom representing the Q value for the given action in the given discretized state."
-  [learner d-state action]
-  (fixed-sized-q-value (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state) action))
-
-(defn deatomize-q-table
-  [qtable-storage]
-  ;;(println "In deatomize-q-table with: " qtable)
-  (cond
-    (map? qtable-storage)
-    (into {} (map (fn [[a b]] {a (deatomize-q-table b)}) qtable-storage))
-
-    (coll? qtable-storage)
-        (vec (doall (map deatomize-q-table qtable-storage)))
-
-        (= (type qtable-storage) (type (atom 42)))
-        (deref qtable-storage)
-
-        :otherwise qtable-storage))
-
-(defn save-q-table
-  "Save the supplied Q-Table using a filename that includes the episode number."
-  [q-table episode name]
-  (let [fn (str name episode "-q-table.edn")
-        {storage :storage obslow :obslow disc-os-win-size :disc-os-win-size} (deref q-table)]
-    (with-open [w (io/writer fn)]
-      (binding [*out* w]
-        (println ";;; Readable EDN Q-Table after episode " episode)
-        (pr {:obslow obslow :disc-os-win-size disc-os-win-size :storage (deatomize-q-table storage)})))
-    fn))
-
-(defn reatomize-q-table
-  [qtable-storage]
-  ;;(println "In deatomize-q-table with: " qtable)
-  (cond
-    (map? qtable-storage)
-    (let [{obslow :obslow
-           disc-os-win-size :disc-os-win-size
-           storage :storage} qtable-storage]
-      {:obslow obslow
-       :disc-os-win-size disc-os-win-size
-       :storage (reatomize-q-table storage)})
-    ;; (into {} (map (fn [[a b]] {a (reatomize-q-table b)}) qtable-storage))
-
-    (coll? qtable-storage)
-    (vec (doall (map reatomize-q-table qtable-storage)))
-
-    (number? qtable-storage)
-    (atom qtable-storage)
-
-    :otherwise qtable-storage))
-
-(defn read-q-table
-  "Read a Q-Table previously written out in EDN format;"
-  [filename]
-  (with-open [r (java.io.PushbackReader. (io/reader filename))]
-    (reatomize-q-table (edn/read r)))) ;(clojure.java.io.PushbackReader. r)
-
-;;; (def test-q-table (make-fixed-sized-q-table-uniform-random 2 3 2 -2 0))
-;;; (pprint (make-fixed-sized-q-table-uniform-random 2 3 2 -2 0))
-
-
-(defn max-atom
-  "Given a list of Q-table entries representing, in order, the available actions, select the greatest quality."
-  [list-of-atoms]
-  ;;(println "max-atom called with " list-of-atoms)
-  (apply max (map deref list-of-atoms)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Statistics
@@ -232,7 +114,7 @@
   (let [{q-table :q-table
          mode    :mode
          numacts :numacts} learner
-        all-actions (get-all-actions-quality learner dstate)]
+        all-actions (qtbl/get-all-actions-quality learner dstate)]
     (case mode
       ;; Mode 0, the default is the textbook selection with epsilon randomized selection.
       0 (textbook-action-selector-with-epsilon-randomization all-actions numacts epsilon)
@@ -284,7 +166,7 @@
            hist history]
       (let [payback (* gamma reward)
             [ds action] (first hist)
-            q-pos (get-action-quality learner ds action)
+            q-pos (qtbl/get-action-quality learner ds action)
             currentq-val (deref q-pos)
             rhist (rest hist)]
         (reset! q-pos (+ currentq-val payback))
@@ -326,8 +208,8 @@
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
             (cond
               (and (not episode-done) (not (>= step max-steps)))
-              (let [max-future-q (max-atom (get-all-actions-quality learner new-d-state))
-                    q-pos (get-action-quality learner current-d-state action)
+              (let [max-future-q (qtbl/max-atom (qtbl/get-all-actions-quality learner new-d-state))
+                    q-pos (qtbl/get-action-quality learner current-d-state action)
                     current-q (deref q-pos)
                     ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
                     ;; Bellman's Equation
@@ -335,7 +217,7 @@
                 (reset! q-pos new-q))
 
               ((:goal-achieved platform) platform new-state episode-done)
-              (let [q-pos (get-action-quality learner new-d-state action)
+              (let [q-pos (qtbl/get-action-quality learner new-d-state action)
                     reward-for-success (+ reward (* 0.5 (/ (- max-steps step) max-steps)))]
                 (reset! q-pos reward-for-success) ; was (+ ereward reward)
                 (def successes (+ 1 successes))
@@ -398,6 +280,6 @@
               (if (> (deref minreward) reward) (reset! minreward reward))
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
-            (println "Saved Q Table as: " (save-q-table q-table episode "DMQL"))))))))
+            (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))))))
 
 ;;; Fin

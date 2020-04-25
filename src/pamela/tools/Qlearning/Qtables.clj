@@ -36,12 +36,15 @@
 ;;  :disc-os-win-size                      ; Window size for a simple discretization.
 ;;  }
 
+;; This file contains functions for making and manipulating Q-tables in a variety of formats
+;; in support of a variety of RL algorithms.
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Fixed-Sized-Q-Table
 ;;; Clojure vectors with every element an atom into which q-values may be placed.
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Constructors
+;;; Constructors for Clojure arrays with atoms
 
 ;;; Initialize the table with linear random values between [low high)
 (defn make-fixed-sized-q-table-uniform-random-aux
@@ -75,6 +78,8 @@
    :disc-os-win-size disc-os-win-size
    :episodes episodes})
 
+;;; (def ex (make-fixed-sized-q-table-uniform-random 3 4 5 0.0 1.0 42 7 99))
+
 ;;; Constructor for clojure-fixed-sized with constant initial q-values
 (defn make-fixed-sized-q-table-constant
   "Q-table constructor that fills the q-table with random values."
@@ -85,6 +90,76 @@
    :obslow obslow
    :disc-os-win-size disc-os-win-size
    :episodes episodes})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Constructors for Java array based Q-tables
+
+(defn set-float-array-values-aux!
+  [aobj indices func index]
+  ;;(println "set-float-array-values-aux! indices=" indices "index=" index)
+  (if (empty? indices)
+    (apply aset-float aobj (concat index [(func index)]))
+    (dotimes [i (first indices)]
+      (set-float-array-values-aux! aobj (rest indices) func (concat index [i])))))
+
+(defn set-float-array-values!
+  [aobj indices func]
+  (set-float-array-values-aux! aobj indices func []))
+
+;;; (def a (apply make-array Float/TYPE (concat (repeatedly numobs (fn [] discretization)) [num-actions])))
+;;; (def n 0.0)
+;;; (set-array-values! a [5 5 5 8] (fn [] (def n (+ n 1.0)) n))
+
+;;; Constructor for java-fixed-sized with linear random q-values
+(defn make-java-fixed-sized-q-table-uniform-random
+  "Q-table constructor that fills the q-table with random values."
+  [numobs discretization num-actions low high obslow disc-os-win-size episodes]
+  ;; (println "MakeQ: numobs=" numobs "disc=" discretization "numacts=" num-actions "low="low "high=" high)
+  (let [indices (concat (repeatedly numobs (fn [] discretization)) [num-actions])
+        jarray (apply make-array Float/TYPE indices)]
+    (set-float-array-values! jarray indices (fn [index] (+ low (* (- high low)(rand)))))
+    {:q-table-type :java-fixed-sized
+     :storage jarray
+     :obslow obslow
+     :disc-os-win-size disc-os-win-size
+     :episodes episodes
+     :indices indices}))
+
+;;; (def ex (make-java-fixed-sized-q-table-uniform-random 3 4 5 0.0 1.0 42 7 99))
+
+;;; Constructor for java-fixed-sized with constant initial q-values
+(defn make-java-fixed-sized-q-table-constant
+  "Q-table constructor that fills the q-table with random values."
+  [numobs discretization num-actions val obslow disc-os-win-size episodes]
+  ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions)
+  (let [indices (concat (repeatedly numobs (fn [] discretization)) [num-actions])
+        jarray (apply make-array Float/TYPE indices)]
+    (set-float-array-values! jarray indices (fn [index] val))
+    {:q-table-type :java-fixed-sized
+     :storage jarray
+     :obslow obslow
+     :disc-os-win-size disc-os-win-size
+     :episodes episodes
+     :indices indices}))
+
+;;; (def ex (make-java-fixed-sized-q-table-constant 3 4 5 -1.0  42 7 99))
+
+;;; Constructor for java-fixed-sized with values q-values
+(defn make-java-fixed-sized-q-table-loaded-values
+  "Q-table constructor that fills the q-table with random values."
+  [numobs discretization num-actions vals obslow disc-os-win-size episodes]
+  ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions)
+  (let [indices (concat (repeatedly numobs (fn [] discretization)) [num-actions])
+        jarray (apply make-array Float/TYPE indices)]
+    (set-float-array-values! jarray indices (fn [index] (reduce nth vals index)))
+    {:q-table-type :java-fixed-sized
+     :storage jarray
+     :obslow obslow
+     :disc-os-win-size disc-os-win-size
+     :episodes episodes
+     :indices indices}))
+
+;;; (def ex (make-java-fixed-sized-q-loaded-values 3 4 5 lvs  42 7 99))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Calculate table dimensions
@@ -135,23 +210,6 @@
 
     :otherwise qtable-storage))
 
-(defn save-q-table
-  "Save the supplied Q-Table using a filename that includes the episode number."
-  [q-table episode name]
-  (let [fn (str name episode "-q-table.edn")
-        {q-table-type :q-table-type
-         obslow :obslow
-         disc-os-win-size :disc-os-win-size} (deref q-table)]
-    (with-open [w (io/writer fn)]
-      (binding [*out* w]
-        (println ";;; Readable EDN Q-Table after episode " episode)
-        (pr {:q-table-type q-table-type
-             :storage (:storage (deatomize-q-table-storage q-table))
-             :obslow obslow
-             :disc-os-win-size disc-os-win-size
-             :episode episode})))
-    fn))
-
 (defn reatomize-q-table
   [qtable]
   ;;(println "In deatomize-q-table with: " qtable)
@@ -177,12 +235,6 @@
 
     :otherwise qtable))
 
-(defn read-q-table
-  "Read a Q-Table previously written out in EDN format;"
-  [filename]
-  (with-open [r (java.io.PushbackReader. (io/reader filename))]
-    (reatomize-q-table (edn/read r)))) ;(clojure.java.io.PushbackReader. r)
-
 (defn max-atom
   "Given a list of Q-table entries representing, in order, the available actions, select the greatest quality."
   [list-of-atoms]
@@ -197,6 +249,8 @@
   (case (:q-table-type self)
     :clojure-fixed-sized (cft-table-size (:storage self))
 
+    :java-fixed-sized (:indices self)
+
     (throw (Throwable. "Unknown Q-table type"))))
 
 (defn get-all-actions-quality
@@ -205,6 +259,9 @@
     (case (:q-table-type q-table)
       :clojure-fixed-sized
       (map deref (apply fixed-sized-q-value (:storage q-table) d-state))
+
+      :java-fixed-sized
+      (apply aget (:storage q-table) d-state)
 
       (throw (Throwable. "Unknown Q-table type")))))
 
@@ -216,15 +273,78 @@
       :clojure-fixed-sized
       (deref (fixed-sized-q-value (apply fixed-sized-q-value (:storage q-table) d-state) action))
 
+      :java-fixed-sized
+      (aget (apply aget (:storage q-table) d-state) action)
+
       (throw (Throwable. "Unknown Q-table type")))))
 
 (defn set-action-quality!
-  [learner ds action new-q]
+  [learner d-state action new-q]
   (let [q-table (deref (:q-table learner))]
     (case (:q-table-type q-table)
       :clojure-fixed-sized
-      (fixed-sized-q-set! (:storage q-table) ds action new-q)
+      (fixed-sized-q-set! (:storage q-table) d-state action new-q)
+
+      :java-fixed-sized
+      (apply aset-float (:storage q-table) (concat d-state [action new-q]))
 
       (throw (Throwable. "Unknown Q-table type")))))
+
+(defn save-q-table
+  "Save the supplied Q-Table using a filename that includes the episode number."
+  [q-table episode name]
+  (let [fn (str name episode "-q-table.edn")
+        {q-table-type :q-table-type
+         obslow :obslow
+         disc-os-win-size :disc-os-win-size
+         indices :indices} (deref q-table)]
+    (case q-table-type
+      :clojure-fixed-sized
+      (with-open [w (io/writer fn)]
+        (binding [*out* w]
+          (println ";;; Readable EDN Q-Table after episode " episode)
+          (pr {:q-table-type q-table-type
+               :storage (:storage (deatomize-q-table-storage q-table))
+               :obslow obslow
+               :disc-os-win-size disc-os-win-size
+               :episode episode
+               :indices indices})))
+
+      :java-fixed-sized
+      (with-open [w (io/writer fn)]
+        (binding [*out* w]
+          (println ";;; Readable EDN Q-Table after episode " episode)
+          (pprint {:q-table-type q-table-type
+                   :storage (:storage (deref q-table))
+                   :obslow obslow
+                   :disc-os-win-size disc-os-win-size
+                   :episode episode
+                   :indices indices})))
+
+      (throw (Throwable. "Unknown Q-table type")))
+    fn))
+
+(defn read-q-table
+  "Read a Q-Table previously written out in EDN format;"
+  [filename]
+  (with-open [r (java.io.PushbackReader. (io/reader filename))]
+    (let [qtable (edn/read r)
+          {q-table-type :q-table-type
+           obslow :obslow
+           storage :storage
+           episode :episode
+           disc-os-win-size :disc-os-win-size
+           indices :indices} qtable]
+      (case q-table-type
+        :clojure-fixed-sized
+        (reatomize-q-table qtable)
+
+        :java-fixed-sized
+        (let [indices (cft-table-size storage)]
+          (make-java-fixed-sized-q-table-loaded-values
+           (- (count indices) 1) (nth indices 0) (last indices) storage obslow disc-os-win-size episode))
+
+        (throw (Throwable. "Unknown Q-table type"))))))
+
 
 ;;; Fin

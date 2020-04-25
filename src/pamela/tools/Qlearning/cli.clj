@@ -190,7 +190,7 @@
                         (do
                           (println "Restarting from a prior q-table: " loaq)
                           (qtbl/read-q-table loaq))
-                        (qtbl/make-fixed-sized-q-table-uniform-random
+                        (qtbl/make-java-fixed-sized-q-table-uniform-random #_make-fixed-sized-q-table-uniform-random
                          numobs ssdi numacts minq maxq (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
 
                       learner (dmql/initialize-learner cycl 200 mode alph disc epsi neps expl ssdi

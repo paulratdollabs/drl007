@@ -228,7 +228,7 @@
 
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."
-  [learner]
+  [learner episode]
   (let [{episodes :episodes
          epsilon  :epsilon
          explore  :explore
@@ -244,7 +244,7 @@
         totalreward (atom 0)
         learning-history (atom [])]
     ;;(pprint learner)
-    (dotimes [episode episodes]
+    (doseq [episode (range (:episode (deref q-table)) episodes)]
       ;; Setup the simulator
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         #_(if (= 0 (mod episode 10))

@@ -49,8 +49,7 @@
   [num-state-variables discretization num-actions low high]
   (if (= num-state-variables 0)
     (vec (doall (repeatedly num-actions
-                            (fn [] (atom
-                                    (+ low (* (- high low)(rand))))))))
+                            (fn [] (atom (+ low (* (- high low)(rand))))))))
     (vec (doall (repeatedly discretization
                             (fn [] (make-fixed-sized-q-table-uniform-random-aux
                                     (- num-state-variables 1) discretization num-actions low high)))))))

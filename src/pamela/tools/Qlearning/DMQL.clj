@@ -30,11 +30,13 @@
 
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
-  [cycletime max-steps mode learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
+  [cycletime max-steps mode stats backup learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
    :mode mode                           ; Choose action selection mode
+   :stats-every stats
+   :backup-every backup
    :max-steps max-steps                 ; Maximum number of steps in an episode
    :alpha learningrate                  ; 0 lt learningrate lt 1
    :gamma discount                      ; 0 lt discount lt 1
@@ -233,9 +235,9 @@
          epsilon  :epsilon
          explore  :explore
          platform :platform
+         stats-every :stats-every
+         save-every :backup-every
          q-table  :q-table} learner
-        stats-every 100 ;+++
-        save-every 100  ;+++
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))

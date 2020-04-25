@@ -67,18 +67,16 @@
 
 (defn textbook-action-selector-with-epsilon-randomization
   "Select an action either randomly according to epsilon or the best."
-  [list-of-atoms numacts eps]
-  ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
+  [list-of-actions numacts eps]
+  ;; (println "In action-selector with list-of-actions=" list-of-actions)
   (if (> (rand) eps)
-    (let [best (apply max-key (fn [x] (deref x)) list-of-atoms)]
-      ;; (println "Best of" list-of-atoms "is " best)
-      (.indexOf list-of-atoms best))
+    (let [best (apply max list-of-actions)]
+      (.indexOf list-of-actions best))
     (int (* (rand) numacts))))
 
 (defn mc-select-nth
-  [atoms eps]
-  (let [vals (map deref atoms)
-        powr (* 4.0 (- 1 eps))          ;eps varies from 1 to 0, Powr varies from 0 to 4
+  [vals eps]
+  (let [powr (* 4.0 (- 1 eps))          ;eps varies from 1 to 0, Powr varies from 0 to 4
         minv (reduce min vals)
         maxv (reduce max vals)
         span (float (- maxv minv))
@@ -98,11 +96,11 @@
 
 (defn monte-carlo-action-selector
   "Select an action using monte-carlo sampling."
-  [list-of-atoms numacts eps epsilon mode] ; epsilon is epsilon randomness, eps is Monte-Carlo confidence
+  [list-of-actions numacts eps epsilon mode] ; epsilon is epsilon randomness, eps is Monte-Carlo confidence
   ;; (println "In action-selector with list-of-atoms=" list-of-atoms)
   (if (and (= mode 2) (< (rand) epsilon))
     (int (* (rand) numacts))
-    (mc-select-nth list-of-atoms eps)))
+    (mc-select-nth list-of-actions eps)))
 
 (def discrepencies 0)
 (def comparisons 0)
@@ -208,25 +206,25 @@
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
             (cond
               (and (not episode-done) (not (>= step max-steps)))
-              (let [max-future-q (qtbl/max-atom (qtbl/get-all-actions-quality learner new-d-state))
-                    q-pos (qtbl/get-action-quality learner current-d-state action)
-                    current-q (deref q-pos)
+              (let [max-future-q (apply max (qtbl/get-all-actions-quality learner new-d-state))
+                    current-q (qtbl/get-action-quality learner current-d-state action)
+                    ;;current-q (deref q-pos)
                     ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
                     ;; Bellman's Equation
                     new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
-                (reset! q-pos new-q))
+                (qtbl/set-action-quality! learner current-d-state action new-q))
 
               ((:goal-achieved platform) platform new-state episode-done)
-              (let [q-pos (qtbl/get-action-quality learner new-d-state action)
+              (let [q-val (qtbl/get-action-quality learner new-d-state action)
                     reward-for-success (+ reward (* 0.5 (/ (- max-steps step) max-steps)))]
-                (reset! q-pos reward-for-success) ; was (+ ereward reward)
+                (qtbl/set-action-quality! learner new-d-state action reward-for-success)
                 (def successes (+ 1 successes))
                 (println "*** Success #" successes "on step" step "in" episode "episodes ***")
                 (if (and (or (= mode 3) (= mode 4)) (not (empty? history)))
                   (back-propagation-of-reward reward-for-success learner history))))
             (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
                     (engrave learner current-d-state action history))))
-        [ereward step]))))  ; some episodes end early and can lead to incorrect average calculations.
+        [ereward step]))))
 
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."

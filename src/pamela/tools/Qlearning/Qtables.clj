@@ -27,6 +27,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Q-Table representation
 
+;; {
+;;  :q-table-type                          ; Implementation type of the Q-Table
+;;  :storage                               ; Fixed storage structure by the implementation type
+;;  :episodes                              ; If the q-table was saved, this lets us resule from where we left off.
+;;  ;; Fields used by various representation
+;;  :obslow                                ; The lowest value possible for an observation
+;;  :disc-os-win-size                      ; Window size for a simple discretization.
+;;  }
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Fixed-Sized-Q-Table
+;;; Clojure vectors with every element an atom into which q-values may be placed.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Constructors
+
+;;; Initialize the table with linear random values between [low high)
 (defn make-fixed-sized-q-table-uniform-random-aux
   "Q-table constructor that fills the q-table with random values."
   [num-state-variables discretization num-actions low high]
@@ -38,13 +55,40 @@
                             (fn [] (make-fixed-sized-q-table-uniform-random-aux
                                     (- num-state-variables 1) discretization num-actions low high)))))))
 
+;;; Initialize all values to -1 - no randomness
+(defn make-fixed-sized-q-table-aux
+  "Q-table constructor that fills the q-table with random values."
+  [num-state-variables discretization num-actions]
+  (if (= num-state-variables 0)
+    (vec (doall (repeatedly num-actions (fn [] (atom -1)))))
+    (vec (doall (repeatedly discretization
+                            (fn [] (make-fixed-sized-q-table-aux
+                                    (- num-state-variables 1) discretization num-actions)))))))
+
+;;; Constructor for clojure-fixed-sized with linear random q-values
 (defn make-fixed-sized-q-table-uniform-random
   "Q-table constructor that fills the q-table with random values."
-  [numobs discretization num-actions low high obslow disc-os-win-size]
+  [numobs discretization num-actions low high obslow disc-os-win-size episodes]
   ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions "low="low "high=" high)
-  {:storage (make-fixed-sized-q-table-uniform-random-aux numobs discretization num-actions low high)
+  {:q-table-type :clojure-fixed-sized
+   :storage (make-fixed-sized-q-table-uniform-random-aux numobs discretization num-actions low high)
    :obslow obslow
-   :disc-os-win-size disc-os-win-size})
+   :disc-os-win-size disc-os-win-size
+   :episodes episodes})
+
+;;; Constructor for clojure-fixed-sized with constant initial q-values
+(defn make-fixed-sized-q-table-constant
+  "Q-table constructor that fills the q-table with random values."
+  [numobs discretization num-actions obslow disc-os-win-size episodes]
+  ;; (println "MakeQ: nomobs=" numobs "disc=" discretization "numacts=" num-actions)
+  {:q-table-type :clojure-fixed-sized
+   :storage (make-fixed-sized-q-table-aux numobs discretization num-actions)
+   :obslow obslow
+   :disc-os-win-size disc-os-win-size
+   :episodes episodes})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Calculate table dimensions
 
 (defn table-size-aux
   [storage size]
@@ -52,80 +96,87 @@
     size
     (table-size-aux (first storage) (conj size (count storage)))))
 
-(defn table-size
+(defn cft-table-size
   [storage]
   (table-size-aux storage []))
 
-(defn q-table-size
-  [qt]
-  (table-size (:storage qt)))
-
+;;;
 (defn fixed-sized-q-value
   "Helper function for q-table indexing."
   [q-table & args]
-  ;;(println "In fixed-sized-q-value, args=" args "qt dimensions=" (q-table-size q-table))
-  ;;;(try
   (reduce nth q-table args))
-  ;;;   (catch Exception e ( "caught exception: " (.getMessage e)))
-  ;;;   (finally (println "In fixed-sized-q-value (DMQL.clj), q-table size=" (q-table-size q-table) "indices=" args)
-  ;;;            (System/exit 0))))
 
-(defn get-all-actions-quality
+(defn fixed-sized-q-set!
+  [q-table d-state action new-q]
+  (reset! (fixed-sized-q-value (apply fixed-sized-q-value q-table d-state) action) new-q))
+
+;;; Extracts the vector of atoms
+(defn cft-get-all-actions-quality
   [learner d-state]
   ;;(println "In get-all-actions-quality, d-state=" d-state "qt dimensions=" (q-table-size (deref (:q-table learner))))
   (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state))
 
-(defn get-action-quality
+(defn cft-get-action-quality
   "Return the atom representing the Q value for the given action in the given discretized state."
   [learner d-state action]
   (fixed-sized-q-value (apply fixed-sized-q-value (:storage (deref (:q-table learner))) d-state) action))
 
-(defn deatomize-q-table
+(defn deatomize-q-table-storage
   [qtable-storage]
   ;;(println "In deatomize-q-table with: " qtable)
   (cond
     (map? qtable-storage)
-    (into {} (map (fn [[a b]] {a (deatomize-q-table b)}) qtable-storage))
+    (into {} (map (fn [[a b]] {a (deatomize-q-table-storage b)}) qtable-storage))
 
     (coll? qtable-storage)
-        (vec (doall (map deatomize-q-table qtable-storage)))
+    (vec (doall (map deatomize-q-table-storage qtable-storage)))
 
-        (= (type qtable-storage) (type (atom 42)))
-        (deref qtable-storage)
+    (= (type qtable-storage) (type (atom 42)))
+    (deref qtable-storage)
 
-        :otherwise qtable-storage))
+    :otherwise qtable-storage))
 
 (defn save-q-table
   "Save the supplied Q-Table using a filename that includes the episode number."
   [q-table episode name]
   (let [fn (str name episode "-q-table.edn")
-        {storage :storage obslow :obslow disc-os-win-size :disc-os-win-size} (deref q-table)]
+        {q-table-type :q-table-type
+         obslow :obslow
+         disc-os-win-size :disc-os-win-size} (deref q-table)]
     (with-open [w (io/writer fn)]
       (binding [*out* w]
         (println ";;; Readable EDN Q-Table after episode " episode)
-        (pr {:obslow obslow :disc-os-win-size disc-os-win-size :storage (deatomize-q-table storage)})))
+        (pr {:q-table-type q-table-type
+             :storage (:storage (deatomize-q-table-storage q-table))
+             :obslow obslow
+             :disc-os-win-size disc-os-win-size
+             :episode episode})))
     fn))
 
 (defn reatomize-q-table
-  [qtable-storage]
+  [qtable]
   ;;(println "In deatomize-q-table with: " qtable)
   (cond
-    (map? qtable-storage)
-    (let [{obslow :obslow
+    (map? qtable)
+    (let [{q-table-type :q-table-type
+           storage :storage
+           obslow :obslow
            disc-os-win-size :disc-os-win-size
-           storage :storage} qtable-storage]
-      {:obslow obslow
+           episode :episode} qtable]
+      {:q-table-type q-table-type
+       :storage (reatomize-q-table storage)
+       :obslow obslow
        :disc-os-win-size disc-os-win-size
-       :storage (reatomize-q-table storage)})
+       :episode episode})
     ;; (into {} (map (fn [[a b]] {a (reatomize-q-table b)}) qtable-storage))
 
-    (coll? qtable-storage)
-    (vec (doall (map reatomize-q-table qtable-storage)))
+    (coll? qtable)
+    (vec (doall (map reatomize-q-table qtable)))
 
-    (number? qtable-storage)
-    (atom qtable-storage)
+    (number? qtable)
+    (atom qtable)
 
-    :otherwise qtable-storage))
+    :otherwise qtable))
 
 (defn read-q-table
   "Read a Q-Table previously written out in EDN format;"
@@ -133,13 +184,48 @@
   (with-open [r (java.io.PushbackReader. (io/reader filename))]
     (reatomize-q-table (edn/read r)))) ;(clojure.java.io.PushbackReader. r)
 
-
 (defn max-atom
   "Given a list of Q-table entries representing, in order, the available actions, select the greatest quality."
   [list-of-atoms]
   ;;(println "max-atom called with " list-of-atoms)
   (apply max (map deref list-of-atoms)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; API
 
+(defn q-table-size
+  [self]
+  (case (:q-table-type self)
+    :clojure-fixed-sized (cft-table-size (:storage self))
+
+    (throw (Throwable. "Unknown Q-table type"))))
+
+(defn get-all-actions-quality
+  [learner d-state]
+  (let [q-table (deref (:q-table learner))]
+    (case (:q-table-type q-table)
+      :clojure-fixed-sized
+      (map deref (apply fixed-sized-q-value (:storage q-table) d-state))
+
+      (throw (Throwable. "Unknown Q-table type")))))
+
+(defn get-action-quality
+  "Return the atom representing the Q value for the given action in the given discretized state."
+  [learner d-state action]
+  (let [q-table (deref (:q-table learner))]
+    (case (:q-table-type q-table)
+      :clojure-fixed-sized
+      (deref (fixed-sized-q-value (apply fixed-sized-q-value (:storage q-table) d-state) action))
+
+      (throw (Throwable. "Unknown Q-table type")))))
+
+(defn set-action-quality!
+  [learner ds action new-q]
+  (let [q-table (deref (:q-table learner))]
+    (case (:q-table-type q-table)
+      :clojure-fixed-sized
+      (fixed-sized-q-set! (:storage q-table) ds action new-q)
+
+      (throw (Throwable. "Unknown Q-table type")))))
 
 ;;; Fin

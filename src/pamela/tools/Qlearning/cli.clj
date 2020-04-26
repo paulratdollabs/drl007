@@ -120,7 +120,8 @@
         {:keys [help version verbose test-connection qlearn] } options
         cmd (first arguments)
         verbosity (read-string (get-in parsed [:options :verbose]))
-        _ (if (> verbosity 1) (println parsed))
+        _ (DPL/set-verbosity verbosity)
+        _ (if (> verbosity 2) (println parsed))
         model (get-in parsed [:options :model])
         outfile (get-in parsed [:options :output])
 

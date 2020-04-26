@@ -51,6 +51,21 @@
 (def ^:dynamic *debug-objects* false)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Verbosity for debugging
+
+(def ^:dynamic *verbose* 0)
+
+(defn set-verbosity
+  [verbosity]
+  (def ^:dynamic *verbose* verbosity))
+
+(defn v1 [] (>= *verbose* 1))
+(defn v2 [] (>= *verbose* 2))
+(defn v3 [] (>= *verbose* 3))
+(defn v4 [] (>= *verbose* 4))
+(defn v5 [] (>= *verbose* 5))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Blocking remote calls to the plant
 
 (def call-lock (Object.))
@@ -113,7 +128,7 @@
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
             (do
-              (println kobj "." kfield = value "(was" (deref known-field) ")")
+              (if (v1) (println "Changed" kobj "." kfield "=" value "(was" (deref known-field) ")"))
               (reset! known-field value))                ; Source and field known so just set the value.
             (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value
         ;; If the source is not known, the object the field and its value must be set

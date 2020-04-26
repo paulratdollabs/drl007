@@ -117,6 +117,17 @@
         (do (println "object " obj "not found in " *objects* "while looking for field " field)
             :object-not-found)))))
 
+(def monitors (atom #{}))
+
+(defn monitor-field
+  [obj field]
+  (reset! monitors (conj #{[obj field]} (deref monitors))))
+
+(defn check-monitor
+  [obj field value]
+  (if (and (v1) (contains? (deref monitors) [obj field]))
+    (println "Setting " obj "." field "=" value)))
+
 (defn updatefieldvalue
   [obj field value]
   #_(println "Setting " obj "." field "=" value)
@@ -124,11 +135,7 @@
     (let [kobj (keyword obj)
           kfield (keyword field)
           known-source (get *objects* kobj)] ; nil or an atom
-      (if (or
-           (and (v1) (= kobj :qc.flight_status) (= kfield :flight_region))
-           (and (v1) (= kobj :qc) (= kfield :reward))
-           (and (v1) (= kobj :qc) (= kfield :done)))
-        (println "Setting" kobj "." kfield "=" value))
+      (check-monitor kobj kfield value)
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field

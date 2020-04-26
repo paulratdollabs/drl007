@@ -112,8 +112,10 @@
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
-            (reset! known-field value)                ; Source and field known so just set the value.
-            (reset! known-source (merge (deref known-source) { kfield (atom value) })))) ; add new field/value
+            (do
+              (println kobj "." kfield = value "(was" (deref known-field) ")")
+              (reset! known-field value))                ; Source and field known so just set the value.
+            (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value
         ;; If the source is not known, the object the field and its value must be set
         (def ^:dynamic *objects* (merge  *objects* { kobj (atom { kfield (atom value) }) })))
       (if *debug-objects* (println "***Set object" obj "field" field "=" value)))))

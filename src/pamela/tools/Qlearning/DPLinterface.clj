@@ -15,6 +15,7 @@
             [clojure.tools.cli :refer [parse-opts]]
             [clojure.pprint :as pp :refer [pprint]]
             [clojure.tools.logging :as log]
+            [clojure.set :as set]
             [environ.core :refer [env]]
             [mbroker.rabbitmq :as mq]
             [langohr.core :as rmq]
@@ -117,16 +118,21 @@
         (do (println "object " obj "not found in " *objects* "while looking for field " field)
             :object-not-found)))))
 
-(def monitors (atom #{}))
+(def ^:dynamic *monitors* (atom #{}))
 
 (defn monitor-field
   [obj field]
-  (reset! monitors (conj #{[obj field]} (deref monitors))))
+  (reset! *monitors* (clojure.set/union #{[obj field]} (deref *monitors*))))
 
 (defn check-monitor
   [obj field value]
-  (if (and (v1) (contains? (deref monitors) [obj field]))
-    (println "Setting " obj "." field "=" value)))
+  (if (and (v1) (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
+    (println "Setting " (format "%s.%s=%s" (name obj) (name field) (str value)))))
+
+(defn get-monitors
+  []
+  (let [mons (vec (doall (map (fn [memb] memb) (deref *monitors*))))]
+    mons))
 
 (defn updatefieldvalue
   [obj field value]

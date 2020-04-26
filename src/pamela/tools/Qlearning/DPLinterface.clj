@@ -128,7 +128,8 @@
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
             (do
-              (if (v1) (println "Changed" kobj "." kfield "=" value "(was" (deref known-field) ")"))
+              (if (and (v1) (not (= value (deref known-field))))
+                (println "Changed" kobj "." kfield "=" value "(was" (deref known-field) ")"))
               (reset! known-field value))                ; Source and field known so just set the value.
             (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value
         ;; If the source is not known, the object the field and its value must be set

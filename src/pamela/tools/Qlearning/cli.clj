@@ -191,15 +191,18 @@
                 #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                 (let [initial-q-table
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
-                        (do
-                          (println "Restarting from a prior q-table: " loaq)
-                          (qtbl/read-q-table loaq))
+                        (let [prior-q-table (qtbl/read-q-table loaq)
+                              {episodes :episodes} prior-q-table]
+                          (println "Restarting from a prior q-table: " loaq "episode=" episodes)
+                          ;; (pprint prior-q-table)
+                          prior-q-table)
                         (qtbl/make-java-fixed-sized-q-table-uniform-random
                          #_make-fixed-sized-q-table-uniform-random
-                         numobs ssdi numacts minq maxq (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
-
-                      learner (dmql/initialize-learner cycl 200 mode stat back alph disc epsi neps expl ssdi
-                                                       numobs numacts initial-q-table gym-if)
+                         numobs ssdi numacts minq maxq
+                         (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
+                      learner (dmql/initialize-learner cycl 200 mode stat back alph disc
+                                                       epsi neps expl ssdi numobs numacts
+                                                       initial-q-table gym-if)
                       #_(pprint initial-q-table)]
                   (dmql/train learner)
                   (println "Training completed.")

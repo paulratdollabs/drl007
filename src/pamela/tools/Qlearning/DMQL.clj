@@ -197,8 +197,7 @@
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
         (let [action (select-action learner current-d-state epsilon)]; Select a action
-          ((:perform platform) platform action)
-          (if (> cycletime 0) (Thread/sleep cycletime))
+          ((:perform platform) platform action cycletime)
           #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
@@ -230,7 +229,7 @@
 
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."
-  [learner episode]
+  [learner]
   (let [{episodes :episodes
          epsilon  :epsilon
          explore  :explore
@@ -244,9 +243,14 @@
         maxreward (atom :unset)
         minreward (atom :unset)
         totalreward (atom 0)
-        learning-history (atom [])]
+        learning-history (atom [])
+        processed-episodes (:episodes (deref q-table))
+        initial-episode (if (or (not processed-episodes) (= processed-episodes 0))
+                          0                          ; Starting a new training
+                          processed-episodes)]       ; Continuing from a prior session
     ;;(pprint learner)
-    (doseq [episode (range (:episode (deref q-table)) episodes)]
+    (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode)
+    (doseq [episode (range initial-episode episodes)]
       ;; Setup the simulator
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         #_(if (= 0 (mod episode 10))

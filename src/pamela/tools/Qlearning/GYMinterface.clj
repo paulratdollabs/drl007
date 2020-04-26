@@ -40,8 +40,9 @@
 
 ;;; Invoke the action
 (defn perform
-  [self action]
-  (DPL/bp-call self "gym" "perform-action" [action]))
+  [self action cycletime]
+  (DPL/bp-call self "gym" "perform-action" [action])
+  (if (> cycletime 0) (Thread/sleep cycletime)))
 
 ;; reset the simulator for the next episode
 (defn reset
@@ -133,7 +134,8 @@
                      (initialize-simulator
                       self (first (:world-parameters self))))
                    (fn [self] (shutdown self))              ; :shutdown
-                   (fn [self action] (perform self action)) ; :perform
+                   (fn [self action cycletime]              ; :perform
+                     (perform self action cycletime))
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
                    (fn [self state done]; :goal-achieved

@@ -124,11 +124,13 @@
     (let [kobj (keyword obj)
           kfield (keyword field)
           known-source (get *objects* kobj)] ; nil or an atom
+      (if (and (v1) (= kobj :qc.flight_status) (= kfield :flight_region))
+        (println "Setting" kobj "." kfield "=" value "(was" (deref known-field) ")"))
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
             (do
-              (if (and (v1) (not (= value (deref known-field))))
+              (if (and (v2) (not (= value (deref known-field))))
                 (println "Changed" kobj "." kfield "=" value "(was" (deref known-field) ")"))
               (reset! known-field value))                ; Source and field known so just set the value.
             (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value

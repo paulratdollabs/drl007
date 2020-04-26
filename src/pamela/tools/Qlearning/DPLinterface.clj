@@ -124,8 +124,11 @@
     (let [kobj (keyword obj)
           kfield (keyword field)
           known-source (get *objects* kobj)] ; nil or an atom
-      (if (and (v1) (= kobj :qc.flight_status) (= kfield :flight_region))
-        (println "Setting" kobj "." kfield "=" value "(was" (deref known-field) ")"))
+      (if (or
+           (and (v1) (= kobj :qc.flight_status) (= kfield :flight_region))
+           (and (v1) (= kobj :qc) (= kfield :reward))
+           (and (v1) (= kobj :qc) (= kfield :done)))
+        (println "Setting" kobj "." kfield "=" value))
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field

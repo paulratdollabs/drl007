@@ -185,9 +185,9 @@
                                      gwld neps mode epsi expl))
                   gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym)]
               ;; Monitors for debugging, put -v 1 in the command line to see them.
-              (DPL/monitor-field :gym :reward)
-              (DPL/monitor-field :gym :done)
-              (doseq [[obj field] (DPL/get-monitors)] (println (format "Monitoring %s.%s" (name obj) (name field))))
+              (DPL/monitor-field :gym  :reward)
+              (DPL/monitor-field :gym  :done)
+              (DPL/print-monitors)
 
               ((:initialize-world gym-if) gym-if) ; Startup the simulator
               (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data

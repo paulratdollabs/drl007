@@ -48,9 +48,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Plant values
 
-(def ^:dynamic *objects* {})
-(def ^:dynamic *debug-objects* false)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Verbosity for debugging
 
@@ -58,7 +55,8 @@
 
 (defn set-verbosity
   [verbosity]
-  (def ^:dynamic *verbose* verbosity))
+  (def ^:dynamic *verbose* verbosity)
+  (println "Verbosity level set to " *verbose*))
 
 (defn v1 [] (>= *verbose* 1))
 (defn v2 [] (>= *verbose* 2))
@@ -98,7 +96,47 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; (Temporary object implementztion - to be replaced by BSP
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Monitors
+
+(def ^:dynamic *monitors* (atom #{}))
+
+(defn monitor-field
+  [obj field]
+  (reset! *monitors* (clojure.set/union #{[obj field]} (deref *monitors*))))
+
+(defn monitoring-field?
+  [obj field]
+  (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
+
+(defn check-monitor
+  [obj field value]
+  (if (and (v1) (monitoring-field? obj field))
+    (println "Establishing " (format "%s.%s=%s" (name obj) (name field) (str value)))))
+
+(defn check-monitor-update
+  [kobj kfield value obj]
+  (let [val (deref obj)]
+    (if (and (v1) (monitoring-field? kobj kfield))
+      (if (or (not (= value val)) (v2))
+        (println "Updating " (format "%s.%s=%s" (name kobj) (name kfield) (str val)))))))
+
+(defn get-monitors
+  []
+  (let [mons (vec (doall (map (fn [memb] memb) (deref *monitors*))))]
+    mons))
+
+(defn print-monitors
+  []
+  (doseq [[obj field] (get-monitors)] (println (format "Monitoring %s.%s" (name obj) (name field)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Object references
+
+(def ^:dynamic *objects* {})
+
 (def field-lock (Object.))
+
 
 (defn print-field-values
   []
@@ -118,45 +156,25 @@
         (do (println "object " obj "not found in " *objects* "while looking for field " field)
             :object-not-found)))))
 
-(def ^:dynamic *monitors* (atom #{}))
-
-(defn monitor-field
-  [obj field]
-  (reset! *monitors* (clojure.set/union #{[obj field]} (deref *monitors*))))
-
-(defn check-monitor
-  [obj field value]
-  (if (and (v1) (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
-    (println "Updating " (format "%s.%s=%s" (name obj) (name field) (str value)))))
-
-(defn check-monitor-update
-  [obj field value obj]
-  (if (and (v1) (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
-    (if (or (not (= value (deref obj))) (v2))
-      (println "Updating " (format "%s.%s=%s" (name obj) (name field) (str value))))))
-
-(defn get-monitors
-  []
-  (let [mons (vec (doall (map (fn [memb] memb) (deref *monitors*))))]
-    mons))
-
 (defn updatefieldvalue
   [obj field value]
-  #_(println "Setting " obj "." field "=" value)
   (locking field-lock
     (let [kobj (keyword obj)
           kfield (keyword field)
           known-source (get *objects* kobj)] ; nil or an atom
+      #_(println (format "Setting %s.%s=%s" (name kobj) (name kfield) (str value)))
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
             (do
               (check-monitor-update kobj kfield value known-field)
               (reset! known-field value))                ; Source and field known so just set the value.
-            (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value
-        ;; If the source is not known, the object the field and its value must be set
-        (def ^:dynamic *objects* (merge  *objects* { kobj (atom { kfield (atom value) }) })))
-      (if *debug-objects* (println "***Set object" obj "field" field "=" value)))))
+            (do
+              (check-monitor kobj kfield value)
+              (reset! known-source (merge (deref known-source) {kfield (atom value) }))))) ; add new field/value
+        (do ; If the source is not known, the object the field and its value must be set
+          (check-monitor kobj kfield value)
+          (def ^:dynamic *objects* (merge  *objects* { kobj (atom { kfield (atom value) }) })))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; RabbitMQ connectivity

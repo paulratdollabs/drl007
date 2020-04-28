@@ -227,6 +227,12 @@
                     (engrave learner current-d-state action history))))
         [ereward step]))))
 
+(defn update-statistic-if
+  [new test anatom]
+  (let [val (deref anatom)]
+    (if (or (= val :unset) (test new val))
+      (reset! anatom new))))
+
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."
   [learner]
@@ -280,8 +286,8 @@
               (reset! totalreward reward))
             (do
               ;;(println "reward=" reward "maxreward=" maxreward "minreward=" minreward)
-              (if (> reward (deref maxreward)) (reset! maxreward reward))
-              (if (> (deref minreward) reward) (reset! minreward reward))
+              (update-statistic-if reward > maxreward)
+              (update-statistic-if reward < minreward)
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
             (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))))))

@@ -119,7 +119,7 @@
   (let [val (deref obj)]
     (if (and (v1) (monitoring-field? kobj kfield))
       (if (or (not (= value val)) (v2))
-        (println "Updating " (format "%s.%s=%s" (name kobj) (name kfield) (str val)))))))
+        (println "Updating " (format "%s.%s=%s" (name kobj) (name kfield) value))))))
 
 (defn get-monitors
   []

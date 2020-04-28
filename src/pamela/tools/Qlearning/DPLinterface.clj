@@ -127,7 +127,13 @@
 (defn check-monitor
   [obj field value]
   (if (and (v1) (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
-    (println "Setting " (format "%s.%s=%s" (name obj) (name field) (str value)))))
+    (println "Updating " (format "%s.%s=%s" (name obj) (name field) (str value)))))
+
+(defn check-monitor-update
+  [obj field value obj]
+  (if (and (v1) (not (empty? (clojure.set/intersection (deref *monitors*) #{[obj field]}))))
+    (if (or (not (= value (deref obj))) (v2))
+      (println "Updating " (format "%s.%s=%s" (name obj) (name field) (str value))))))
 
 (defn get-monitors
   []
@@ -141,13 +147,11 @@
     (let [kobj (keyword obj)
           kfield (keyword field)
           known-source (get *objects* kobj)] ; nil or an atom
-      (check-monitor kobj kfield value)
       (if known-source
         (let [known-field (get (deref known-source) kfield)] ; The source is known, but what about the field?
           (if known-field
             (do
-              (if (and (v2) (not (= value (deref known-field))))
-                (println "Changed" kobj "." kfield "=" value "(was" (deref known-field) ")"))
+              (check-monitor-update kobj kfield value known-field)
               (reset! known-field value))                ; Source and field known so just set the value.
             (reset! known-source (merge (deref known-source) {kfield (atom value) })))) ; add new field/value
         ;; If the source is not known, the object the field and its value must be set

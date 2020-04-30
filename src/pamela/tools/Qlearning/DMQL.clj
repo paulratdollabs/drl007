@@ -213,7 +213,8 @@
               (let [max-future-q (apply max (qtbl/get-all-actions-quality learner new-d-state))
                     current-q (qtbl/get-action-quality learner current-d-state action)
                     ;;current-q (deref q-pos)
-                    ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward "gamma=" gamma "max-future-q=" max-future-q)
+                    ;;_ (println "alpha=" alpha "currentQ=" current-q "reward=" reward
+                    ;;           "gamma=" gamma "max-future-q=" max-future-q)
                     ;; Bellman's Equation
                     new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
                 (qtbl/set-action-quality! learner current-d-state action new-q))

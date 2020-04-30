@@ -269,8 +269,9 @@
         (let [[reward steps] (run-episode learner episode eps)]
           (if (= 0 (mod episode stats-every))
             (do
-              (if (> episode 0)
-                (println "Episode=" episode
+              (if (> episode initial-episode)
+                (println (str (java.time.LocalDateTime/now))
+                         "Episode=" episode
                          "Epsilon=" eps
                          "Steps=" steps
                          "Max reward=" (deref maxreward)
@@ -281,8 +282,9 @@
                                               :max-reward (deref maxreward)
                                               :min-reward (deref minreward)
                                               :average-reward (/ (deref totalreward) stats-every)}))
-              (println "Saved statistics as: " ; maybe write as CSV file?
-                       (save-statistics (deref learning-history) episode "DMQL"))
+              (if (> episode initial-episode)
+                (println "Saved statistics as: " ; maybe write as CSV file?
+                         (save-statistics (deref learning-history) episode "DMQL")))
               ;; The first result of each set sets the starting values.
               (reset! maxreward reward)
               (reset! minreward reward)

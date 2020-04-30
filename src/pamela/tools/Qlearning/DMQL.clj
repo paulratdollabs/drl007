@@ -30,11 +30,13 @@
 
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
-  [cycletime max-steps mode stats backup learningrate discount epsilon episodes explore ssdi numobs numacts initialQ platform]
+  [cycletime max-steps mode render stats backup learningrate discount epsilon
+   episodes explore ssdi numobs numacts initialQ platform]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
    :mode mode                           ; Choose action selection mode
+   :render-every render
    :stats-every stats
    :backup-every backup
    :max-steps max-steps                 ; Maximum number of steps in an episode
@@ -177,6 +179,7 @@
   [learner episode epsilon]
   (let [{;; Pull out all of the pieces aheadof the loop
          mode      :mode
+         render-every :render-every
          q-table   :q-table
          cycletime :cycletime
          max-steps :max-steps
@@ -203,7 +206,7 @@
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
                 episode-done ((:get-field-value platform) platform (:plantid platform) :done)
                 new-d-state ((:get-discrete-state platform) learner new-state)]
-            (if (= 0 (mod episode 1000)) ((:render platform) platform)) ;+++
+            (if (= 0 (mod episode render-every)) ((:render platform) platform)) ;+++
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
             (cond
               (and (not episode-done) (not (>= step max-steps)))

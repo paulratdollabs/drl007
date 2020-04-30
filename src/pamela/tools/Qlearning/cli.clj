@@ -41,6 +41,7 @@
                   ["-i" "--if id" "IF ID" :default "gym"] ; The interface ID (plant - robot or simulator)
                   ["-n" "--episodes n" "Number of Episodes" :default 25000 :parse-fn #(Integer/parseInt %)]
                   ["-S" "--statistics n" "Statistics saved after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
+                  ["-R" "--render n" "Render after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-B" "--backup n" "Backup frequency in episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
@@ -131,6 +132,7 @@
         exch (get-in parsed [:options :exchange])
         ifid (get-in parsed [:options :if])       ; Interface ID
         neps (get-in parsed [:options :episodes]) ; Number of episodes
+        rend (get-in parsed [:options :render])   ; Number of episodes before rendering
         stat (get-in parsed [:options :statistics]) ; Number of episodes before statistics
         back (get-in parsed [:options :backup])   ; Number of episodes before saving Q-table
         loaq (get-in parsed [:options :loadqtable]) ; Restart learning from a prior Q table
@@ -206,7 +208,7 @@
                          #_make-fixed-sized-q-table-uniform-random
                          numobs ssdi numacts minq maxq
                          (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
-                      learner (dmql/initialize-learner cycl 200 mode stat back alph disc
+                      learner (dmql/initialize-learner cycl 200 mode rend stat back alph disc
                                                        epsi neps expl ssdi numobs numacts
                                                        initial-q-table gym-if)
                       #_(pprint initial-q-table)]

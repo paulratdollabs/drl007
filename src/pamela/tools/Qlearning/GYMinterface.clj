@@ -94,8 +94,8 @@
         (System/exit 0))))
 
 (defn goal-achieved                     ; Open to decide differently
-  [state done]
-  (> (first state) (DPL/get-field-value :gym :goal_position)))
+  [state reward done]
+  (and done (>= reward 0)))   #_(> (first state) (DPL/get-field-value :gym :goal_position))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; State space discretization
@@ -138,8 +138,8 @@
                      (perform self action cycletime))
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
-                   (fn [self state done]; :goal-achieved
-                     (goal-achieved state done))
+                   (fn [self state reward done]; :goal-achieved
+                     (goal-achieved state reward done))
                    (fn [learner state]     ; :get-discrete-state
                      (get-discrete-state learner state))
                    (fn [self obj field]     ; :get-field-value

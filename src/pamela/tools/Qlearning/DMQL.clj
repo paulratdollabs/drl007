@@ -218,7 +218,7 @@
                     new-q (+ (* (- 1.0 alpha) current-q) (* alpha (+ reward (* gamma max-future-q))))]
                 (qtbl/set-action-quality! learner current-d-state action new-q))
 
-              ((:goal-achieved platform) platform new-state episode-done)
+              ((:goal-achieved platform) platform new-state reward episode-done)
               (let [q-val (qtbl/get-action-quality learner new-d-state action)
                     reward-for-success (+ reward (* 0.5 (/ (- max-steps step) max-steps)))]
                 (qtbl/set-action-quality! learner new-d-state action reward-for-success)

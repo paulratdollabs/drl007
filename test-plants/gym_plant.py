@@ -97,7 +97,7 @@ class Rmq:
         action_number = int(action_name)
         if self.env.action_space.n >= action_number >= 0:
             self.gym_new_state, self.gym_reward, self.gym_done, _ = self.env.step(action_number)
-            self.gym_goal_position = self.env.goal_position
+            self.gym_goal_position = 0 #self.env.goal_position
             self.publish_step_obs_rmq()
         else:
             print('Bad action specified:', action_name)

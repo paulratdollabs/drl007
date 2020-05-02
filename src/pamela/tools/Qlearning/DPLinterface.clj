@@ -100,6 +100,11 @@
 ;;; Monitors
 
 (def ^:dynamic *monitors* (atom #{}))
+(def ^:dynamic *monitor-on* (atom true))
+
+(defn set-monitor-on
+  [trueorfalse]
+  (reset! *monitor-on* trueorfalse))
 
 (defn monitor-field
   [obj field]
@@ -111,13 +116,13 @@
 
 (defn check-monitor
   [obj field value]
-  (if (and (v1) (monitoring-field? obj field))
+  (if (and (deref *monitor-on*) (v1) (monitoring-field? obj field))
     (println "Establishing " (format "%s.%s=%s" (name obj) (name field) (str value)))))
 
 (defn check-monitor-update
   [kobj kfield value obj]
   (let [val (deref obj)]
-    (if (and (v1) (monitoring-field? kobj kfield))
+    (if (and  (deref *monitor-on*) (v1) (monitoring-field? kobj kfield))
       (if (or (not (= value val)) (v2))
         (println "Updating " (format "%s.%s=%s" (name kobj) (name kfield) value))))))
 

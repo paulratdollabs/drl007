@@ -234,6 +234,16 @@
   (println "Running-activities = " running-activities)
   (check-for-satisfied-activities))
 
+(def fresh-data-lock (Object.))
+(def fresh-data-promises {})
+
+(defn await-plant-message
+  [plant-id]
+  (let [apromise (promise)]
+    (locking fresh-data-lock
+      (def fresh-data-promises (merge fresh-data-promises {plant-id apromise})))
+    (deref apromise)))                     ; Block until the data is ready
+
 (defn incoming-msgs [_ metadata ^bytes payload]
   (def received-count (inc received-count))
   #_(when (zero? (mod received-count 1000))
@@ -264,21 +274,27 @@
         ;; Handle observations from plant
         (= rk "observations")
         (if true #_(= plantid plantifid)
-          (do
-            (if (= state :finished)
-              ;; A previously called function has returned
-              (do #_(println "Activity " id "finished with: " (get m "reason"))
-                  (function-finished id (get m "reason"))))
-            (doseq [anobs observations]
-              #_(println "Look at obs=" anobs)
-              (let [field (get anobs "field")
-                    value (get anobs "value")]
-                (cond  field
-                       (do #_(println "Received " plantid "." field "=" value)
-                           (updatefieldvalue plantid field value))
-                       :else
-                       (do
-                         (println "Received observation: " anobs))))))))
+            (do
+              (if (= state :finished)
+                ;; A previously called function has returned
+                (do #_(println "Activity " id "finished with: " (get m "reason"))
+                    (function-finished id (get m "reason"))))
+              (doseq [anobs observations]
+                #_(println "Look at obs=" anobs)
+                (let [field (get anobs "field")
+                      value (get anobs "value")]
+                  (cond  field
+                         (do #_(println "Received " plantid "." field "=" value)
+                             (updatefieldvalue plantid field value))
+                         :else
+                         (do
+                           (println "Received observation: " anobs)))))
+              ;; After processing the update, see if anyone was waiting for them
+              (let [apromise (locking fresh-data-lock
+                               (let [oldpromise (get fresh-data-promises plantid)]
+                                 (def fresh-data-promises (dissoc fresh-data-promises plantid))
+                                 oldpromise))]
+                (if apromise (deliver apromise plantid))))))
       ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
       )
     (check-for-satisfied-activities)))

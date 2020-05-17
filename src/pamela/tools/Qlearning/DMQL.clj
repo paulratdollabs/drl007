@@ -221,7 +221,7 @@
 
               ((:goal-achieved platform) platform new-state reward episode-done)
               (let [q-val (qtbl/get-action-quality learner new-d-state action)
-                    reward-for-success (+ reward (* 0.5 (/ (- max-steps step) max-steps)))]
+                    reward-for-success 0] ;+++ should be maxQ
                 (qtbl/set-action-quality! learner new-d-state action reward-for-success)
                 (def successes (+ 1 successes))
                 (println "*** Success #" successes "on step" step "in" episode "episodes ***")

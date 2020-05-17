@@ -204,7 +204,10 @@
                           (println "Restarting from a prior q-table: " loaq "episode=" episodes)
                           ;; (pprint prior-q-table)
                           prior-q-table)
-                        (qtbl/make-java-fixed-sized-q-table-uniform-random
+                        (qtbl/make-java-fixed-sized-q-table-constant
+                         numobs ssdi numacts (/ (+ minq maxq) 2.0)
+                         (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0)
+                        #_(qtbl/make-java-fixed-sized-q-table-uniform-random
                          #_make-fixed-sized-q-table-uniform-random
                          numobs ssdi numacts minq maxq
                          (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))

@@ -93,9 +93,15 @@
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
-(defn goal-achieved                     ; Open to decide differently
-  [state reward done]
+(defn goal-achieved-generic                     ; Open to decide differently
+  [self state reward done]
   (and done (>= reward 0)))   #_(> (first state) (DPL/get-field-value :gym :goal_position))
+
+(defn goal-achieved-MountainCar-V0
+  [self state reward done]
+  (> (first state) (DPL/get-field-value :gym :goal_position)))
+
+(def goal-achieved goal-achieved-generic)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; State space discretization
@@ -138,8 +144,11 @@
                      (perform self action cycletime))
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
-                   (fn [self state reward done]; :goal-achieved
-                     (goal-achieved state reward done))
+                   (cond (= (first world-name) "MountainCar-v0")    ; :goal-achieved
+                         goal-achieved-MountainCar-V0
+                         ;; Add the other worlds here!
+                         :otherwise
+                         goal-achieved-generic)
                    (fn [learner state]     ; :get-discrete-state
                      (get-discrete-state learner state))
                    (fn [self obj field]     ; :get-field-value

@@ -91,8 +91,8 @@
 (def #^{:added "0.1.0"}
   actions
   "Valid dmrl command line actions"
-  {"q-learner" (var action-function)
-   "demo" (var demo-function)})
+  {"qlearn" (var action-function)
+   "test-connection" (var demo-function)})
 
 (defn usage
   "Print dmrl command line help."
@@ -175,10 +175,10 @@
     (cond (>= (count arguments) 1)
           (case (keyword (first arguments))
             :test-connection
-            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange)]
+            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange :gym)]
               ((:initialize-world gym-if) gym-if)
               ((:reset gym-if) gym-if)
-              ((:perform gym-if) gym-if 0)
+              ((:perform gym-if) gym-if 0 0)
               ((:render gym-if) gym-if))
 
             :qlearn

@@ -69,7 +69,8 @@ class Rmq:
         self.plant.started(msg)
         envname, = msg['args']
         #print('gym make: ', envname)
-        self.env=gym.make(envname)
+        #self.env=gym.make(envname, render_mode='human')
+        self.env=gym.make(envname) # Until we can figure out how to get the old functionality with the render_more +++
         self.plant.finished(msg)
         #print('make_env, env=', self.env)
         self.publish_data_obs_rmq()

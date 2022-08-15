@@ -60,7 +60,7 @@ class Plant:
         self.done = False
         if plantid is not None:
             self.channel.queue_bind(queue=self.qname, exchange=exchange, routing_key=plantid)
-        print('Plant instance created by thread:', self.channel_thread.getName())
+        print('Plant instance created by thread:', self.channel_thread.name)
 
     def myprint(self):
         print("plantid: " + str(self.plantid) + ", exchange: " + str(self.exchange) +
@@ -211,10 +211,10 @@ class Plant:
     def __basic_publish(self, exchange, routing_key, data, properties=None):
         th = threading.current_thread()
 
-        if th.ident != self.channel_thread.ident or th.getName() != self.channel_thread.getName():
+        if th.ident != self.channel_thread.ident or th.name != self.channel_thread.name:
             print( 'WARN: ', 'discrepancy in plant create thread and outgoing thread sending the outgoing message')
-            print( 'current thread', th.ident, th.getName())
-            print( 'channel thread', self.channel_thread.ident, self.channel_thread.getName())
+            print( 'current thread', th.ident, th.name)
+            print( 'channel thread', self.channel_thread.ident, self.channel_thread.name)
 
         if properties is None:
             self.channel.basic_publish(exchange, routing_key, data)

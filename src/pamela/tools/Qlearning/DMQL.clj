@@ -56,8 +56,8 @@
 
 (defn save-statistics
   "Save statistics to a named file."
-  [stats episode name]
-  (let [fn (str name "-learning-statistics.edn")]
+  [stats episode rid name]
+  (let [fn (str rid "-" name "-learning-statistics.edn")]
     (with-open [w (io/writer fn)]
       (binding [*out* w]
         (println ";;; Readable EDN Statistics")
@@ -247,7 +247,8 @@
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."
   [learner]
-  (let [{episodes :episodes
+  (let [runid (.getTime (new java.util.Date))
+        {episodes :episodes
          epsilon  :epsilon
          explore  :explore
          platform :platform
@@ -299,7 +300,7 @@
                                               :average-reward (if (= (deref totalreward) :unset) :unset (/ (deref totalreward) stats-every))}))
               (if (> episode initial-episode)
                 (println "Saved statistics as: " ; maybe write as CSV file?
-                         (save-statistics (deref learning-history) episode "DMQL")))
+                         (save-statistics (deref learning-history) episode runid "DMQL")))
               ;; The first result of each set sets the starting values.
               (reset! numsuccesses (if succeeded 1 0))
               (reset! maxreward reward)

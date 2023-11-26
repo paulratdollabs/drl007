@@ -65,6 +65,7 @@
     fn))
 
 (def successes 0)
+(def episode-of-first-success nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Action Selection
@@ -196,6 +197,7 @@
            donep false
            ereward 0.0
            step 0.0
+           succeeded false
            history ()]
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
@@ -224,12 +226,17 @@
                     reward-for-success 0] ;+++ should be maxQ
                 (qtbl/set-action-quality! learner new-d-state action reward-for-success)
                 (def successes (+ 1 successes))
-                (println "*** Success #" successes "on step" step "in" episode "episodes ***")
+                (cond (not episode-of-first-success)
+                      (do (def episode-of-first-success episode)
+                          (println "*** FIRST SUCCESS ACHIEVED ON EPISODE ", episode))
+                      :otherwise
+                      (println "*** Success #" successes "on step" step "in" episode "episodes ***"))
                 (if (and (or (= mode 3) (= mode 4)) (not (empty? history)))
                   (back-propagation-of-reward reward-for-success learner history))))
             (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
+                    (and episode-done ((:goal-achieved platform) platform new-state reward episode-done))
                     (engrave learner current-d-state action history))))
-        [ereward step]))))
+        [ereward step succeeded]))))
 
 (defn update-statistic-if
   [new test anatom]
@@ -252,7 +259,8 @@
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))
         maxreward (atom :unset)
         minreward (atom :unset)
-        totalreward (atom 0)
+        totalreward (atom :unset)
+        numsuccesses (atom 0)
         learning-history (atom [])
         processed-episodes (:episodes (deref q-table))
         initial-episode (if (or (not processed-episodes) (= processed-episodes 0))
@@ -267,7 +275,7 @@
           (println "*** Starting Episode " episode "Epsilon=" eps "Q-table size=" (q-table-size (deref q-table))"\r"))
         ((:reset platform) platform)
         ;; Unneeded (Thread/sleep 10) ;Reset the platform and give it time to settle down
-        (let [[reward steps] (run-episode learner episode eps)]
+        (let [[reward steps succeeded] (run-episode learner episode eps)]
           (if (= 0 (mod episode stats-every))
             (do
               (if (> episode initial-episode)
@@ -275,23 +283,31 @@
                          "Episode=" episode
                          "Epsilon=" eps
                          "Steps=" steps
+                         "Total successes=" successes
+                         "Successes this batch=" (deref numsuccesses)
                          "Max reward=" (deref maxreward)
                          "Average reward=" (/ (deref totalreward) stats-every)
                          "Min reward=" (deref minreward)))
               (reset! learning-history (conj (deref learning-history)
                                              {:episode episode
+                                              :first-success episode-of-first-success
+                                              :stats-every stats-every
+                                              :numsuccesses (deref numsuccesses)
+                                              :total-successes successes
                                               :max-reward (deref maxreward)
                                               :min-reward (deref minreward)
-                                              :average-reward (/ (deref totalreward) stats-every)}))
+                                              :average-reward (if (= (deref totalreward) :unset) :unset (/ (deref totalreward) stats-every))}))
               (if (> episode initial-episode)
                 (println "Saved statistics as: " ; maybe write as CSV file?
                          (save-statistics (deref learning-history) episode "DMQL")))
               ;; The first result of each set sets the starting values.
+              (reset! numsuccesses (if succeeded 1 0))
               (reset! maxreward reward)
               (reset! minreward reward)
               (reset! totalreward reward))
             (do
               ;;(println "reward=" reward "maxreward=" maxreward "minreward=" minreward)
+              (if succeeded (reset! numsuccesses (+ (deref numsuccesses) 1)))
               (update-statistic-if reward > maxreward)
               (update-statistic-if reward < minreward)
               (reset! totalreward (+ (deref totalreward) reward))))

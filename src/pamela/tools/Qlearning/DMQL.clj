@@ -70,13 +70,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Action Selection
 
+;;; Fix for ;indexOf not working with java data, see below.
+
+(defn myIndexOf [aseq anitem]
+  (loop [theSeq aseq
+         theIndex 0]
+    (if (= (first theSeq) == anitem)
+      theIndex
+      (if (not theSeq)
+        -1
+        (recur (rest theSeq) (+ 1 theIndex))))))
+
 (defn textbook-action-selector-with-epsilon-randomization
   "Select an action either randomly according to epsilon or the best."
   [list-of-actions numacts eps]
-  ;; (println "In action-selector with list-of-actions=" list-of-actions)
   (if (> (rand) eps)
-    (let [best (apply max list-of-actions)]
-      (.indexOf list-of-actions best))
+    (let [best (reduce max list-of-actions)]
+      (myIndexOf list-of-actions best)) ; Previously used ;indexOf but that breaks with java data.
     (int (* (rand) numacts))))
 
 (defn mc-select-nth

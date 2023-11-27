@@ -18,7 +18,7 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
+            [pamela.tools.Qlearning.fromjson :as fromjson]
             [pamela.tools.Qlearning.Qtables :as qtbl]
             [pamela.tools.Qlearning.DMQL :as dmql]
             [pamela.tools.Qlearning.DPLinterface :as DPL]

@@ -21,7 +21,6 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
             [pamela.tools.Qlearning.DPLinterface :as DPL])
   (:import [pamela.tools.Qlearning.DPLinterface dplinterface])
   (:gen-class))

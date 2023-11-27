@@ -4,7 +4,7 @@
 ; Copyright (c) 2012.  All rights reserved.
 ;
 
-(ns tpn.fromjson
+(ns pamela.tools.Qlearning.fromjson
   "Functions to read TPN JSON data into clojure data structures.
   Note: For conversion to defrecords, see import.clj"
   (:require [clojure.data.json :as json]))
@@ -62,4 +62,3 @@
   "Write json to the file"
   (spit fname (json/write-str m))
   )
-

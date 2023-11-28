@@ -218,7 +218,8 @@
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
                 episode-done ((:get-field-value platform) platform (:plantid platform) :done)
                 new-d-state ((:get-discrete-state platform) learner new-state)]
-            (if (= 0 (mod episode render-every)) ((:render platform) platform)) ;+++
+            (if (and (not (= render-every 0)) (= 0 (mod episode render-every)))
+              ((:render platform) platform))
             ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
             (cond
               (and (not episode-done) (not (>= step max-steps)))

@@ -7,7 +7,8 @@
 (ns pamela.tools.Qlearning.fromjson
   "Functions to read TPN JSON data into clojure data structures.
   Note: For conversion to defrecords, see import.clj"
-  (:require [clojure.data.json :as json]))
+  (:require [clojure.data.json :as json])
+  (:gen-class))
 
 (def debug nil)
 

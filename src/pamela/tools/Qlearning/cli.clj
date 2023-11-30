@@ -18,7 +18,7 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
+            [pamela.tools.Qlearning.fromjson :as fromjson]
             [pamela.tools.Qlearning.Qtables :as qtbl]
             [pamela.tools.Qlearning.DMQL :as dmql]
             [pamela.tools.Qlearning.DPLinterface :as DPL]
@@ -175,7 +175,7 @@
     (cond (>= (count arguments) 1)
           (case (keyword (first arguments))
             :test-connection
-            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange :gym)]
+            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange :gym rend)]
               ((:initialize-world gym-if) gym-if)
               ((:reset gym-if) gym-if)
               ((:perform gym-if) gym-if 0 0)
@@ -185,7 +185,7 @@
             ;; Start the learner!
             (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
                                      gwld neps mode epsi expl))
-                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym)]
+                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym rend)]
               ;; Monitors for debugging, put -v 1 in the command line to see them.
               (DPL/monitor-field :gym  :reward)
               (DPL/monitor-field :gym  :done)

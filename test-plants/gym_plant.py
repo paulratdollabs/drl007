@@ -67,12 +67,18 @@ class Rmq:
         self.done = False
         self.last_rmq_call_back = time.time()
 
+    envname = None
+    humanmode = False
+    rendermode = -1
+
     def make_env(self, msg):
         self.plant.started(msg)
-        envname, = msg['args']
-        print('gym make: ', envname)
-        #self.env=gym.make(envname, render_mode='human')
-        self.env=gym.make(envname) # Until we can figure out how to get the old functionality with the render_more +++
+        self.envname, self.rendermode = msg['args']
+        print('gym make: ', self.envname, 'render-mode = ', self.rendermode)
+        if self.rendermode == -1:
+            self.env=gym.make(self.envname, render_mode='human')
+        else:
+            self.env=gym.make(self.envname)
         self.plant.finished(msg)
         #print('make_env, env=', self.env)
         self.publish_data_obs_rmq()
@@ -81,15 +87,34 @@ class Rmq:
         self.plant.started(msg)
         # no args for reset -- alt, = msg['args']
         if not self.env==None:
+            if (self.rendermode > 0) and self.humanmode:
+                self.env.close()             # Close the rendering
+                self.env = gym.make(self.envname) # Make a new envinonment without rendering
+                self.humanmode = False
             self.gym_new_state=self.env.reset()
             #print('reset') #, alt
             self.publish_state_obs_rmq()
         self.plant.finished(msg)
         #print('done reset')
 
+    def close(self, msg):
+        self.plant.started(msg)
+        # no args for reset -- alt, = msg['args']
+        if not self.env==None:
+            self.env.close()
+            self.env=None
+            self.publish_state_obs_rmq()
+        self.plant.finished(msg)
+        #print('done close')
+
     def render(self, msg):
         self.plant.started(msg)
         # no args for render -- alt, = msg['args']
+        if (self.rendermode > 0) and (self.humanmode == False):
+            self.env.close() # close the existing environment
+            self.env=gym.make(self.envname, render_mode='human')
+            self.humanmode = True
+            self.gym_new_state=self.env.reset()
         self.env.render()
         #print('render') #, alt
         self.plant.finished(msg)

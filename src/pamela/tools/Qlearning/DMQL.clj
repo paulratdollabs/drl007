@@ -18,10 +18,14 @@
             [clojure.java.io :as io]
             [clojure.core :as cc]
             [clojure.edn :as edn]
+            [clojure.data.json :as json]
+            [pamela.tools.Qlearning.fromjson :as fromjson]
             [clojure.math.numeric-tower :as math]
             [environ.core :refer [env]]
-            [pamela.tools.Qlearning.Qtables :as qtbl])
-  (:gen-class))
+            [pamela.tools.Qlearning.DPLinterface :as dpli :refer [v1, v2, v3, v4, v5]]
+            [pamela.tools.Qlearning.Qtables :as qtbl]
+            [pamela.tools.Qlearning.analytics :as anal])
+(:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)
 
@@ -51,18 +55,6 @@
    :platform platform
    })
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Statistics
-
-(defn save-statistics
-  "Save statistics to a named file."
-  [stats episode rid name]
-  (let [fn (str rid "-" name "-learning-statistics.edn")]
-    (with-open [w (io/writer fn)]
-      (binding [*out* w]
-        (println ";;; Readable EDN Statistics")
-        (pr stats)))
-    fn))
 
 (def successes 0)
 (def episode-of-first-success nil)
@@ -70,13 +62,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Action Selection
 
+;;; Fix for ;indexOf not working with java data, see below.
+
+(defn myIndexOf
+     [aseq anitem]
+  (loop [theSeq aseq
+         theIndex 0]
+    (if (= (first theSeq) == anitem)
+      theIndex
+      (if (not theSeq)
+        -1
+        (recur (rest theSeq) (+ 1 theIndex))))))
+
 (defn textbook-action-selector-with-epsilon-randomization
   "Select an action either randomly according to epsilon or the best."
   [list-of-actions numacts eps]
-  ;; (println "In action-selector with list-of-actions=" list-of-actions)
   (if (> (rand) eps)
-    (let [best (apply max list-of-actions)]
-      (.indexOf list-of-actions best))
+    (let [best (reduce max list-of-actions)
+          posn (myIndexOf list-of-actions best)]
+      ; (print "best = " best " posn = " posn "numacts =" numacts)
+      posn)   ; Previously used .indexOf but that breaks with java data.
     (int (* (rand) numacts))))
 
 (defn mc-select-nth
@@ -202,14 +207,18 @@
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
         (let [action (select-action learner current-d-state epsilon)]; Select a action
+          (if (v4) (println "About to run action " action))
           ((:perform platform) platform action cycletime)
+          (if (v4) (println "Action completed"))
           #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
                 episode-done ((:get-field-value platform) platform (:plantid platform) :done)
                 new-d-state ((:get-discrete-state platform) learner new-state)]
-            (if (= 0 (mod episode render-every)) ((:render platform) platform)) ;+++
-            ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
+            (if (and (not (= render-every 0))
+                     (= 0 (mod episode render-every)))
+              ((:render platform) platform))
+            (if (v4) (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state))
             (cond
               (and (not episode-done) (not (>= step max-steps)))
               (let [max-future-q (apply max (qtbl/get-all-actions-quality learner new-d-state))
@@ -228,9 +237,9 @@
                 (def successes (+ 1 successes))
                 (cond (not episode-of-first-success)
                       (do (def episode-of-first-success episode)
-                          (println "*** FIRST SUCCESS ACHIEVED ON EPISODE ", episode))
+                          (if (v1) (println "*** FIRST SUCCESS ACHIEVED ON EPISODE ", episode)))
                       :otherwise
-                      (println "*** Success #" successes "on step" step "in" episode "episodes ***"))
+                      (if (v1) (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
                 (if (and (or (= mode 3) (= mode 4)) (not (empty? history)))
                   (back-propagation-of-reward reward-for-success learner history))))
             (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
@@ -268,7 +277,7 @@
                           0                          ; Starting a new training
                           processed-episodes)]       ; Continuing from a prior session
     ;;(pprint learner)
-    (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode)
+    (if (v1) (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode))
     (doseq [episode (range initial-episode episodes)]
       ;; Setup the simulator
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
@@ -280,7 +289,7 @@
           (if (= 0 (mod episode stats-every))
             (do
               (if (> episode initial-episode)
-                (println (str (java.time.LocalDateTime/now))
+                (if (v1) (println (str (java.time.LocalDateTime/now))
                          "Episode=" episode
                          "Epsilon=" eps
                          "Steps=" steps
@@ -288,7 +297,7 @@
                          "Successes this batch=" (deref numsuccesses)
                          "Max reward=" (deref maxreward)
                          "Average reward=" (/ (deref totalreward) stats-every)
-                         "Min reward=" (deref minreward)))
+                         "Min reward=" (deref minreward))))
               (reset! learning-history (conj (deref learning-history)
                                              {:episode episode
                                               :first-success episode-of-first-success
@@ -299,8 +308,8 @@
                                               :min-reward (deref minreward)
                                               :average-reward (if (= (deref totalreward) :unset) :unset (/ (deref totalreward) stats-every))}))
               (if (> episode initial-episode)
-                (println "Saved statistics as: " ; maybe write as CSV file?
-                         (save-statistics (deref learning-history) episode runid "DMQL")))
+                (if (v1) (println "Saved statistics as: " ; maybe write as CSV file?
+                           (anal/save-statistics (deref learning-history) episode runid "DMQL"))))
               ;; The first result of each set sets the starting values.
               (reset! numsuccesses (if succeeded 1 0))
               (reset! maxreward reward)
@@ -313,6 +322,6 @@
               (update-statistic-if reward < minreward)
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
-            (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))))))
+            (if (v1) (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL")))))))))
 
 ;;; Fin

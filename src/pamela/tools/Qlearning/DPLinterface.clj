@@ -23,7 +23,7 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson])
+            [pamela.tools.Qlearning.fromjson :as fromjson])
   (:gen-class)
   )
 
@@ -295,7 +295,7 @@
                                  (def fresh-data-promises (dissoc fresh-data-promises plantid))
                                  oldpromise))]
                 (if apromise (deliver apromise plantid))))))
-      ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (tpn.fromjson/map-from-json-str observations)))
+       ;; :else (println "plantid=" plantid "plantifid="  plantifid (if (= plantid plantifid) "same" "different") "observations=" (if observations (fromjson/map-from-json-str observations)))
       )
     (check-for-satisfied-activities)))
 

@@ -21,7 +21,6 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
             [pamela.tools.Qlearning.DPLinterface :as DPL])
   (:import [pamela.tools.Qlearning.DPLinterface dplinterface])
   (:gen-class))
@@ -35,8 +34,8 @@
 
 ;;; Initialize the plant (robot or simulator)
 (defn initialize-simulator
-  [self gym-world]
-  (DPL/bp-call self "gym" "make_env" [gym-world]))
+  [self gym-world rendermode]
+  (DPL/bp-call self "gym" "make_env" [gym-world rendermode]))
 
 ;;; Invoke the action
 (defn perform
@@ -129,7 +128,7 @@
       discstate)))
 
 (defn make-gym-interface
-  [world-name routing channel exchange plantid]
+  [world-name routing channel exchange plantid rend]
   (let [interface (dplinterface.        ; dpl/make-dpl-interface
                    world-name           ; :world-parameters
                    routing              ; :routing
@@ -138,7 +137,7 @@
                    plantid              ; :plantid
                    (fn [self]           ; :initialize-world
                      (initialize-simulator
-                      self (first (:world-parameters self))))
+                      self (first (:world-parameters self)) rend))
                    (fn [self] (shutdown self))              ; :shutdown
                    (fn [self action cycletime]              ; :perform
                      (perform self action cycletime))

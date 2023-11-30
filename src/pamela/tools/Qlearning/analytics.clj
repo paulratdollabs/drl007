@@ -35,13 +35,17 @@
 (defn save-statistics
   "Save statistics to a named file."
   [stats episode rid name]
-  (let [fn (str rid "-" name (if (= json-or-edn :edn) "-learning-statistics.edn" "-learning-statistics.json"))]
-    (if  (= json-or-edn :edn)
+  (let ; +++ [fn (str rid "-" name (if (= json-or-edn :edn) "-learning-statistics.edn" "-learning-statistics.json"))]
+      ;; +++ for now let's do both!
+      [fn  (str rid "-" name "-learning-statistics.edn")
+       fnj (str rid "-" name "-learning-statistics.json")]
+    ;; (if  (= json-or-edn :edn)
       (with-open [w (io/writer fn)]
         (binding [*out* w]
           (println ";;; Readable EDN Statistics")
           (pr stats)))
-      (fromjson/to-file stats fn))
+      (fromjson/to-file stats fnj)
+      ;  )
     fn))
 
 (def adirpath "/Volumes/paul/DataForNDIST23/")
@@ -77,6 +81,34 @@
 
 ;;; (convert-edn-statistics-to-json adirpath data-example)
 
+;;; CVS state and action data
 
-(def successes 0)
-(def episode-of-first-success nil)
+(def csvfile nil)
+
+(defn open-csv-file
+  [runid name episode]
+  (let [fn (str (str runid) "-" name "-e-" "ds+a-" (str episode) ".csv")]
+    (def csvfile (io/writer fn :append false))))
+
+(defn close-csv-file
+  [runid name episode]
+  (.close csvfile))
+
+(def once-only true)
+
+(defn comma-separated-values
+  [vec-of-vals]
+  (loop [vov vec-of-vals
+         res ""]
+    (if (empty? vov)
+      res
+      (recur (rest vov) (str res (first vov) ", ")))))
+
+;;; (comma-separated-values ["foo" "bar" "baz"])
+
+(defn write-csv-data [dstate action]
+  (let [numdims (count dstate)]
+    (when once-only
+      ;; (println "dstate = " (str dstate) " numdims = " (str numdims))
+      (def once-only false))
+    (.write csvfile (str (comma-separated-values dstate)  (str action) "\n"))))

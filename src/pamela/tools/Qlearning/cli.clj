@@ -50,10 +50,11 @@
                   ["-q" "--min-q n" "Minimum Q value" :default -2.0  :parse-fn #(Float/parseFloat %)]
                   ["-u" "--max-q n" "Maximum Q value" :default 0.0   :parse-fn #(Float/parseFloat %)]
                   ["-s" "--statedivision n" "Discretization of each state dimension" :default 20  :parse-fn #(Integer/parseInt %)]
+                  ["-y" "--stateactiondata n" "Write State and chosen action data to a CSV file for analysis" :default false :parse-fn #(Integer/parseInt %)]
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
                   ["-z" "--epsilon fr" "Starting value for epsilon exploration 1 >= fr >= 0" :default 1.0 :parse-fn #(Float/parseFloat %)]
-                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1  :parse-fn #(Integer/parseInt %)]
+                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1 :parse-fn #(Integer/parseInt %)]
 
                   ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
@@ -143,6 +144,7 @@
         maxq (get-in parsed [:options :max-q])    ; Maximum initial Q value
         expl (get-in parsed [:options :explore])  ; fraction of episodes for which exploration takes place
         ssdi (get-in parsed [:options :statedivision]) ; State space discretization for each dimension
+        ssav (get-in parsed [:options :stateactiondata]) ;Save state and chosen actions as a CSV file
         cycl (get-in parsed [:options :cycletime]); Cycletime in milliseconds
         gwld (get-in parsed [:options :gymworld]) ; Name of the GYM world to instantiate
         mode (get-in parsed [:options :mode])     ; Mode 0=normal, 1=Monte-Carlo, etc.
@@ -212,7 +214,7 @@
                          numobs ssdi numacts minq maxq
                          (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
                       learner (dmql/initialize-learner cycl 200 mode rend stat back alph disc
-                                                       epsi neps expl ssdi numobs numacts
+                                                       epsi neps expl ssdi ssav numobs numacts
                                                        initial-q-table gym-if)
                       #_(pprint initial-q-table)]
                   (dmql/train learner)

@@ -35,7 +35,7 @@
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
   [cycletime max-steps mode render stats backup learningrate discount epsilon
-   episodes explore ssdi numobs numacts initialQ platform]
+   episodes explore ssdi ssav numobs numacts initialQ platform]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
@@ -50,6 +50,7 @@
    :episodes episodes                   ; number of episodes
    :explore explore
    :discretization ssdi
+   :savestateandaction ssav
    :numobs numobs
    :numacts numacts
    :platform platform
@@ -192,6 +193,7 @@
          alpha     :alpha
          gamma     :gamma
          ssdi      :discretization
+         ssav      :savestateandaction
          numobs    :numobs
          numacts   :numacts
          statedisc :state-discretizer
@@ -210,6 +212,7 @@
           (if (v4) (println "About to run action " action))
           ((:perform platform) platform action cycletime)
           (if (v4) (println "Action completed"))
+          (when (== (mod episode ssav) 0) (anal/write-csv-data current-d-state action))
           #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
@@ -263,7 +266,8 @@
          platform :platform
          stats-every :stats-every
          save-every :backup-every
-         q-table  :q-table} learner
+         q-table  :q-table
+         ssav :savestateandaction} learner
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))
@@ -280,6 +284,7 @@
     (if (v1) (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode))
     (doseq [episode (range initial-episode episodes)]
       ;; Setup the simulator
+      (when (== (mod episode ssav) 0) (anal/open-csv-file runid "DMQL" episode))
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         #_(if (= 0 (mod episode 10))
           (println "*** Starting Episode " episode "Epsilon=" eps "Q-table size=" (q-table-size (deref q-table))"\r"))
@@ -322,6 +327,7 @@
               (update-statistic-if reward < minreward)
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
-            (if (v1) (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL")))))))))
+            (if (v1) (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))
+          (when (== (mod episode ssav) 0) (anal/close-csv-file runid "DMQL" episode)))))))
 
 ;;; Fin

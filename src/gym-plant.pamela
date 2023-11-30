@@ -1,0 +1,45 @@
+;; Copyright © 2020 Dynamic Object Language Labs Inc.
+;;
+;; Pamela model for GYM
+;;
+;; HTN/TPN Generation:
+;; pamela -v -i gym-plant.pamela -o gym-plant -t "(main.main)" htn
+;; Need to update this !!!pamela -v -i gym-plant.pamela -o qc-takeoff-land -t "(main.takeoff-land)" htn
+
+(defpclass GYM []
+           :meta {:doc "GYM simulator"}
+  :fields {;; After action completion
+           reward  {:observable true}
+           state   {:observable true}
+           done    {:observable true}
+           ;; Useful data
+           numacts {:observable true}
+           numobs  {:observable true}
+           high0   {:observable true}
+           high1   {:observable true}
+           high2   {:observable true}
+           high3   {:observable true}
+           low0    {:observable true}
+           low1    {:observable true}
+           low2    {:observable true}
+           low3    {:observable true}
+           }
+  :methods [
+            (defpmethod make-env [name])                ; make
+            (defpmethod reset [])                       ; reset
+            (defpmethod perform-action [action_number]) ; step
+            (defpmethod render [])                      ; render
+            ])
+
+(defpclass main []
+           :fields {gym (GYM :id "gym")}
+           :methods
+           [(defpmethod main [] )
+            (defpmethod demo []
+              (sequence
+               (gym.makeenv "MountainCar-v0")
+               (delay :bounds [7 8])
+               (gym.perform-action 0)
+               (gym.render)
+               (gym.reset)))
+            ])

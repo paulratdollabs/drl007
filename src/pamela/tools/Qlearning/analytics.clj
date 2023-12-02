@@ -106,6 +106,29 @@
 
 ;;; (convert-q-table-to-json adirpath qtable-example)
 
+(defn convert-q-table-to-json-for-scatterplot
+  [dir-path list-of-filenames]
+  (doseq [afile list-of-filenames]
+    (let [in-fn (str dir-path afile ".edn")
+          out-fn (str dir-path afile ".json")
+          in-data (read-string (slurp in-fn))
+          ;; _ (pprint in-data)
+          data (get in-data :storage)
+          ;; _ (pprint data)
+          xlated (into [] (apply concat (map (fn [row rownum]
+                                               (into [] (remove nil? (map (fn [tuple tuplenum]
+                                                                            ;; (print "Tuple = " tuple)
+                                                                            (let [m (apply max tuple)]
+                                                                              (if (== m -1.0)
+                                                                                nil ;[rownum tuplenum nil]
+                                                                                [rownum tuplenum (.indexOf tuple m)])))
+                                                                          row (range 0 (count row))))))
+                                             data (range 0 (count data)))))]
+      (println "Processing " in-fn " -> " out-fn)
+      (fromjson/to-file xlated out-fn))))
+
+;;; (convert-q-table-to-json-for-scatterplot adirpath qtable-example)
+
 ;;; CVS state and action data
 
 (def csvfile nil)

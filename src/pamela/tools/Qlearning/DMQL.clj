@@ -24,7 +24,8 @@
             [environ.core :refer [env]]
             [pamela.tools.Qlearning.DPLinterface :as dpli :refer [v1, v2, v3, v4, v5]]
             [pamela.tools.Qlearning.Qtables :as qtbl]
-            [pamela.tools.Qlearning.analytics :as anal])
+            [pamela.tools.Qlearning.analytics :as anal]
+            [pamela.tools.Qlearning.advisor :as advisor])
 (:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)
@@ -115,6 +116,7 @@
 
 (def discrepencies 0)
 (def comparisons 0)
+(def previous-action nil)
 
 (defn select-action
   "Select an action using algorithm selected by --mode."
@@ -208,11 +210,13 @@
            history ()]
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
-        (let [action (select-action learner current-d-state epsilon)]; Select a action
+        (let [action-proposed (select-action learner current-d-state epsilon) ; Select a action
+              action (advisor/consider-advice-about-action action-proposed previous-action current-d-state)]
           (if (v4) (println "About to run action " action))
           ((:perform platform) platform action cycletime)
+          (def previous-action action)
           (if (v4) (println "Action completed"))
-          (when (== (mod episode ssav) 0) (anal/write-csv-data current-d-state action))
+          (when (and ssav (== (mod episode ssav) 0)) (anal/write-csv-data current-d-state action))
           #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
@@ -280,11 +284,12 @@
         initial-episode (if (or (not processed-episodes) (= processed-episodes 0))
                           0                          ; Starting a new training
                           processed-episodes)]       ; Continuing from a prior session
+    (advisor/setup-advisors)
     ;;(pprint learner)
     (if (v1) (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode))
     (doseq [episode (range initial-episode episodes)]
       ;; Setup the simulator
-      (when (== (mod episode ssav) 0) (anal/open-csv-file runid "DMQL" episode))
+      (when (and ssav (== (mod episode ssav) 0)) (anal/open-csv-file runid "DMQL" episode))
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         #_(if (= 0 (mod episode 10))
           (println "*** Starting Episode " episode "Epsilon=" eps "Q-table size=" (q-table-size (deref q-table))"\r"))
@@ -328,6 +333,6 @@
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
             (if (v1) (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))
-          (when (== (mod episode ssav) 0) (anal/close-csv-file runid "DMQL" episode)))))))
+          (when (and ssav (== (mod episode ssav) 0)) (anal/close-csv-file runid "DMQL" episode)))))))
 
 ;;; Fin

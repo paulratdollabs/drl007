@@ -32,7 +32,7 @@
 
 (defn register-advice
   [advice]
-  (if (V3) (println "New advice " (:name advice) "registered"))
+  (if (v3) (println "New advice " (:name advice) "registered"))
   (def all-advice (conj all-advice advice)))
 
 (defn make-advice
@@ -44,7 +44,7 @@
 (defn applicable
   [advice env]
   (when ((:precondition advice) env)
-    (if (V5) (println "Advice " (:name advice) "precondition satisfied"))
+    (if (v5) (println "Advice " (:name advice) "precondition satisfied"))
     advice))
 
 (defn find-relevant-advice
@@ -54,7 +54,7 @@
 
 (defn select-action-from-votes
   [action-proposed votes]
-  (if (and (V4) (not (== (first votes) action-proposed)))
+  (if (and (v4) (not (== (first votes) action-proposed)))
     (println "Following advice for action " (first votes) " proposed was " action-proposed))
   (first votes)) ;+++ think about this +++
 
@@ -67,7 +67,7 @@
       (if (empty? actionable-advice)
         action-proposed
         (let [votes (into [] (remove nil? (map (fn [advisor] ((:action-proposed advisor) env)) actionable-advice)))]
-            (if (V4) (println (count actionable-advice) " pieces of relevant advice found, and these votes resulted " votes))
+            (if (v4) (println (count actionable-advice) " pieces of relevant advice found, and these votes resulted " votes))
             (if (empty? votes)
               action-proposed
               (select-action-from-votes action-proposed votes)))))))

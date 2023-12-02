@@ -49,6 +49,8 @@
     fn))
 
 (def adirpath "/Volumes/paul/DataForNDIST23/")
+(def qtable-example ["DMQL9000-q-table"])
+
 (def data-example
   ["1701040169369-DMQL-learning-statistics"
    "1701041331030-DMQL-learning-statistics"
@@ -80,6 +82,29 @@
       (fromjson/to-file in-data out-fn))))
 
 ;;; (convert-edn-statistics-to-json adirpath data-example)
+
+(defn convert-q-table-to-json
+  [dir-path list-of-filenames]
+  (doseq [afile list-of-filenames]
+    (let [in-fn (str dir-path afile ".edn")
+          out-fn (str dir-path afile ".json")
+          in-data (read-string (slurp in-fn))
+          ;; _ (pprint in-data)
+          data (get in-data :storage)
+          ;; _ (pprint data)
+          xlated (into [] (map (fn [row]
+                                 (into [] (map (fn [tuple]
+                                                 ;; (print "Tuple = " tuple)
+                                                 (let [m (apply max tuple)]
+                                                   (if (== m -1.0)
+                                                     nil
+                                                     (.indexOf tuple m))))
+                                               row)))
+                               data))]
+      (println "Processing " in-fn " -> " out-fn)
+      (fromjson/to-file xlated out-fn))))
+
+;;; (convert-q-table-to-json adirpath qtable-example)
 
 ;;; CVS state and action data
 

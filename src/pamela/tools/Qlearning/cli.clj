@@ -42,6 +42,7 @@
                   ["-n" "--episodes n" "Number of Episodes" :default 25000 :parse-fn #(Integer/parseInt %)]
                   ["-S" "--statistics n" "Statistics saved after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-R" "--render n" "Render after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
+                  ["-A" "--advice adv" "Advice to the learner" :default nil]
                   ["-B" "--backup n" "Backup frequency in episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
@@ -134,6 +135,7 @@
         ifid (get-in parsed [:options :if])       ; Interface ID
         neps (get-in parsed [:options :episodes]) ; Number of episodes
         rend (get-in parsed [:options :render])   ; Number of episodes before rendering
+        agpt (get-in parsed [:options :advice])   ; Advice to the learner
         stat (get-in parsed [:options :statistics]) ; Number of episodes before statistics
         back (get-in parsed [:options :backup])   ; Number of episodes before saving Q-table
         loaq (get-in parsed [:options :loadqtable]) ; Restart learning from a prior Q table
@@ -181,7 +183,8 @@
               ((:initialize-world gym-if) gym-if)
               ((:reset gym-if) gym-if)
               ((:perform gym-if) gym-if 0 0)
-              ((:render gym-if) gym-if))
+              ((:render gym-if) gym-if)
+              ((:ask-gpt gym-if) gym-if agpt))
 
             :qlearn
             ;; Start the learner!
@@ -197,7 +200,8 @@
               (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
               ;; (gym/print-field-values)
               (let [numobs  (DPL/get-field-value :gym :numobs)
-                    numacts (DPL/get-field-value :gym :numacts)]
+                    numacts (DPL/get-field-value :gym :numacts)
+                    gpt-response  (DPL/get-field-value :gym :ask-gpt)]
                 #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                 (let [initial-q-table
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
@@ -215,7 +219,7 @@
                          (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
                       learner (dmql/initialize-learner cycl 200 mode rend stat back alph disc
                                                        epsi neps expl ssdi ssav numobs numacts
-                                                       initial-q-table gym-if)
+                                                       initial-q-table gym-if agpt gpt-response)
                       #_(pprint initial-q-table)]
                   (dmql/train learner)
                   (println "Training completed.")

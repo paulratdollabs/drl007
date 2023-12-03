@@ -26,6 +26,7 @@
   net.mikera/vectorz-clj {:mvn/version "0.47.0"}
   org.slf4j/slf4j-api {:mvn/version "1.7.21"}
   ruiyun/tools.timer {:mvn/version "1.0.1"}
+  ;; net.clojars.wkok/openai-clojure {:mvn/version "0.14.0"}
   }
 
  :aliases

@@ -43,6 +43,8 @@
                          goal-achieved get-discrete-state
                          ;; Access to filed values
                          get-field-value set-field-value get-current-state
+                         ;; Interact with GPT
+                         ask-gpt
                          ])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

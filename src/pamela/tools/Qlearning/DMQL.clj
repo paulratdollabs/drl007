@@ -36,7 +36,7 @@
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
   [cycletime max-steps mode render stats backup learningrate discount epsilon
-   episodes explore ssdi ssav numobs numacts initialQ platform]
+   episodes explore ssdi ssav numobs numacts initialQ platform advice-given gpt-response]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
@@ -55,6 +55,8 @@
    :numobs numobs
    :numacts numacts
    :platform platform
+   :ask-gpt advice-given
+   :gpt-response gpt-response
    })
 
 
@@ -199,9 +201,11 @@
          numobs    :numobs
          numacts   :numacts
          statedisc :state-discretizer
-         platform  :platform} learner
+         platform  :platform
+         advice    :ask-gpt} learner
         current-state ((:get-current-state platform) platform numobs)
-        discstate ((:get-discrete-state platform) learner current-state)]
+        discstate ((:get-discrete-state platform) learner current-state)
+        gpt-response ((:get-gpt-response platform) learner)]
     (loop [current-d-state discstate
            donep false
            ereward 0.0
@@ -225,7 +229,8 @@
             (if (and (not (= render-every 0))
                      (= 0 (mod episode render-every)))
               ((:render platform) platform))
-            (if (v4) (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state))
+            (if (v4) (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done
+                              "disc.State=" new-d-state "advice=" advice))
             (cond
               (and (not episode-done) (not (>= step max-steps)))
               (let [max-future-q (apply max (qtbl/get-all-actions-quality learner new-d-state))
@@ -271,7 +276,9 @@
          stats-every :stats-every
          save-every :backup-every
          q-table  :q-table
-         ssav :savestateandaction} learner
+         ssav :savestateandaction
+         advice :agpt
+         gpt-response :gpt-response} learner
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))
@@ -284,7 +291,7 @@
         initial-episode (if (or (not processed-episodes) (= processed-episodes 0))
                           0                          ; Starting a new training
                           processed-episodes)]       ; Continuing from a prior session
-    (advisor/setup-advisors)
+    (advisor/setup-advisors advice gpt-response)
     ;;(pprint learner)
     (if (v1) (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode))
     (doseq [episode (range initial-episode episodes)]

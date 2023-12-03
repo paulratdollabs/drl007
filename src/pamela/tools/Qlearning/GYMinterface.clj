@@ -53,6 +53,11 @@
   [self]
   (DPL/bp-call self "gym" "render" []))
 
+;; reset the simulator for the next episode
+(defn ask-gpt
+  [self]
+  (DPL/bp-call self "gym" "ask-gpt" []))
+
 ;;; shutdown the simulator - NYI
 (defn shutdown
   [self]
@@ -90,6 +95,13 @@
     3 [(DPL/get-field-value :gym :state0) (DPL/get-field-value :gym :state1) (DPL/get-field-value :gym :state2)]
     4 [(DPL/get-field-value :gym :state0) (DPL/get-field-value :gym :state1) (DPL/get-field-value :gym :state2) (DPL/get-field-value :gym :state3)]
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
+        (System/exit 0))))
+
+(defn get-gpt-response
+  [numobs]
+  (case numobs
+    1 [(DPL/get-field-value :gym :ask-gpt)]
+    (do (println (format "Wrong number of observations (%d), must be 1." numobs))
         (System/exit 0))))
 
 (defn goal-achieved-generic                     ; Open to decide differently
@@ -143,6 +155,7 @@
                      (perform self action cycletime))
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
+                   (fn [self] (ask-gpt self))               ; :gpt interface
                    (cond (= (first world-name) "MountainCar-v0")    ; :goal-achieved
                          goal-achieved-MountainCar-V0
                          ;; Add the other worlds here!

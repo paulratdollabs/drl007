@@ -23,7 +23,9 @@
             [pamela.tools.Qlearning.DPLinterface :as dpli :refer [v1, v2, v3, v4, v5]]
             [clojure.math.numeric-tower :as math]
             [environ.core :refer [env]]
-            [pamela.tools.Qlearning.Qtables :as qtbl])
+            [pamela.tools.Qlearning.Qtables :as qtbl]
+            ;; [wkok.openai-clojure.api :as api]
+            )
   (:gen-class))
 
 ;;; (in-ns 'pamela.tools.Qlearning.advisor)
@@ -36,7 +38,7 @@
   (def all-advice (conj all-advice advice)))
 
 (defn make-advice
-  [name precondition action-proposed]
+  [name json precondition action-proposed]
   {:name name,
    :precondition precondition,
    :action-proposed action-proposed})
@@ -85,6 +87,23 @@
   (:previous-action env))
 
 (defn setup-advisors
+  [advice gpt-response]
+  (when (and advice gpt-response)
+    (let [advisor1 (make-advice advice gpt-response, advisor1-precondition advisor1-action)]
+      (if (v1) (println "Installing advice: " advice))
+      (register-advice advisor1))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; GPT interface
+
+;;; Commented out because it doesn't build at the moment.
+
+#_(defn test1
   []
-  (let [advisor1 (make-advice "limit-changes-at-speed", advisor1-precondition advisor1-action)]
-    (register-advice advisor1)))
+  (api/create-chat-completion {:model "gpt-3.5-turbo"
+                             :messages [{:role "system" :content "You are a helpful assistant."}
+                                        {:role "user" :content "Who won the world series in 2020?"}
+                                        {:role "assistant" :content "The Los Angeles Dodgers won the World Series in 2020."}
+                                        {:role "user" :content "Where was it played?"}]}))
+
+;;; (test1)

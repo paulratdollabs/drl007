@@ -18,7 +18,7 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
+            [pamela.tools.Qlearning.fromjson :as fromjson]
             [pamela.tools.Qlearning.Qtables :as qtbl]
             [pamela.tools.Qlearning.DMQL :as dmql]
             [pamela.tools.Qlearning.DPLinterface :as DPL]
@@ -42,6 +42,7 @@
                   ["-n" "--episodes n" "Number of Episodes" :default 25000 :parse-fn #(Integer/parseInt %)]
                   ["-S" "--statistics n" "Statistics saved after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-R" "--render n" "Render after n Episodes" :default 100 :parse-fn #(Integer/parseInt %)]
+                  ["-A" "--advice adv" "Advice to the learner" :default nil]
                   ["-B" "--backup n" "Backup frequency in episodes" :default 100 :parse-fn #(Integer/parseInt %)]
                   ["-a" "--alpha f" "Learning Rate" :default 0.1 :parse-fn #(Float/parseFloat %)]
                   ["-d" "--discount f" "Discount Rate" :default 0.95 :parse-fn #(Float/parseFloat %)]
@@ -50,10 +51,11 @@
                   ["-q" "--min-q n" "Minimum Q value" :default -2.0  :parse-fn #(Float/parseFloat %)]
                   ["-u" "--max-q n" "Maximum Q value" :default 0.0   :parse-fn #(Float/parseFloat %)]
                   ["-s" "--statedivision n" "Discretization of each state dimension" :default 20  :parse-fn #(Integer/parseInt %)]
+                  ["-y" "--stateactiondata n" "Write State and chosen action data to a CSV file for analysis" :default false :parse-fn #(Integer/parseInt %)]
 
                   ["-g" "--gymworld gw" "Name of the Gym World" :default "MountainCar-v0"]
                   ["-z" "--epsilon fr" "Starting value for epsilon exploration 1 >= fr >= 0" :default 1.0 :parse-fn #(Float/parseFloat %)]
-                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1  :parse-fn #(Integer/parseInt %)]
+                  ["-=" "--mode n" "Select a special mode [0=normal, 1=Monte-Carlo, others to come]" :default 1 :parse-fn #(Integer/parseInt %)]
 
                   ;; Debugging options
                   ["-w" "--watchedplant id" "WATCHEDPLANT ID" :default nil]
@@ -133,6 +135,7 @@
         ifid (get-in parsed [:options :if])       ; Interface ID
         neps (get-in parsed [:options :episodes]) ; Number of episodes
         rend (get-in parsed [:options :render])   ; Number of episodes before rendering
+        agpt (get-in parsed [:options :advice])   ; Advice to the learner
         stat (get-in parsed [:options :statistics]) ; Number of episodes before statistics
         back (get-in parsed [:options :backup])   ; Number of episodes before saving Q-table
         loaq (get-in parsed [:options :loadqtable]) ; Restart learning from a prior Q table
@@ -143,6 +146,7 @@
         maxq (get-in parsed [:options :max-q])    ; Maximum initial Q value
         expl (get-in parsed [:options :explore])  ; fraction of episodes for which exploration takes place
         ssdi (get-in parsed [:options :statedivision]) ; State space discretization for each dimension
+        ssav (get-in parsed [:options :stateactiondata]) ;Save state and chosen actions as a CSV file
         cycl (get-in parsed [:options :cycletime]); Cycletime in milliseconds
         gwld (get-in parsed [:options :gymworld]) ; Name of the GYM world to instantiate
         mode (get-in parsed [:options :mode])     ; Mode 0=normal, 1=Monte-Carlo, etc.
@@ -175,17 +179,18 @@
     (cond (>= (count arguments) 1)
           (case (keyword (first arguments))
             :test-connection
-            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange :gym)]
+            (let [gym-if (gym/make-gym-interface (list "MountainCar-v0") "dmrl" rmq-channel exchange :gym rend)]
               ((:initialize-world gym-if) gym-if)
               ((:reset gym-if) gym-if)
               ((:perform gym-if) gym-if 0 0)
-              ((:render gym-if) gym-if))
+              ((:render gym-if) gym-if)
+              ((:ask-gpt gym-if) gym-if agpt))
 
             :qlearn
             ;; Start the learner!
             (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
                                      gwld neps mode epsi expl))
-                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym)]
+                  gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym rend)]
               ;; Monitors for debugging, put -v 1 in the command line to see them.
               (DPL/monitor-field :gym  :reward)
               (DPL/monitor-field :gym  :done)
@@ -195,7 +200,8 @@
               (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
               ;; (gym/print-field-values)
               (let [numobs  (DPL/get-field-value :gym :numobs)
-                    numacts (DPL/get-field-value :gym :numacts)]
+                    numacts (DPL/get-field-value :gym :numacts)
+                    gpt-response  (DPL/get-field-value :gym :ask-gpt)]
                 #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                 (let [initial-q-table
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?
@@ -212,8 +218,8 @@
                          numobs ssdi numacts minq maxq
                          (gym/get-obs-low numobs) (gym/win-size numobs ssdi) 0))
                       learner (dmql/initialize-learner cycl 200 mode rend stat back alph disc
-                                                       epsi neps expl ssdi numobs numacts
-                                                       initial-q-table gym-if)
+                                                       epsi neps expl ssdi ssav numobs numacts
+                                                       initial-q-table gym-if agpt gpt-response)
                       #_(pprint initial-q-table)]
                   (dmql/train learner)
                   (println "Training completed.")

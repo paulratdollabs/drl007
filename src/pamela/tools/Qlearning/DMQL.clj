@@ -18,10 +18,15 @@
             [clojure.java.io :as io]
             [clojure.core :as cc]
             [clojure.edn :as edn]
+            [clojure.data.json :as json]
+            [pamela.tools.Qlearning.fromjson :as fromjson]
             [clojure.math.numeric-tower :as math]
             [environ.core :refer [env]]
-            [pamela.tools.Qlearning.Qtables :as qtbl])
-  (:gen-class))
+            [pamela.tools.Qlearning.DPLinterface :as dpli :refer [v1, v2, v3, v4, v5]]
+            [pamela.tools.Qlearning.Qtables :as qtbl]
+            [pamela.tools.Qlearning.analytics :as anal]
+            [pamela.tools.Qlearning.advisor :as advisor])
+(:gen-class))
 
 ;(in-ns 'pamela.tools.Qlearning.DMQL)
 
@@ -31,7 +36,7 @@
 (defn initialize-learner
   "Establishes the data structure that governs the operation of the learner."
   [cycletime max-steps mode render stats backup learningrate discount epsilon
-   episodes explore ssdi numobs numacts initialQ platform]
+   episodes explore ssdi ssav numobs numacts initialQ platform advice-given gpt-response]
   {
    :q-table (atom initialQ)             ; Q-table
    :cycletime cycletime                 ; cycle time in milliseconds
@@ -46,36 +51,41 @@
    :episodes episodes                   ; number of episodes
    :explore explore
    :discretization ssdi
+   :savestateandaction ssav
    :numobs numobs
    :numacts numacts
    :platform platform
+   :ask-gpt advice-given
+   :gpt-response gpt-response
    })
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Statistics
-
-(defn save-statistics
-  "Save statistics to a named file."
-  [stats episode name]
-  (let [fn (str name "-learning-statistics.edn")]
-    (with-open [w (io/writer fn)]
-      (binding [*out* w]
-        (println ";;; Readable EDN Statistics")
-        (pr stats)))
-    fn))
 
 (def successes 0)
+(def episode-of-first-success nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Action Selection
 
+;;; Fix for ;indexOf not working with java data, see below.
+
+(defn myIndexOf
+     [aseq anitem]
+  (loop [theSeq aseq
+         theIndex 0]
+    (if (= (first theSeq) == anitem)
+      theIndex
+      (if (not theSeq)
+        -1
+        (recur (rest theSeq) (+ 1 theIndex))))))
+
 (defn textbook-action-selector-with-epsilon-randomization
   "Select an action either randomly according to epsilon or the best."
   [list-of-actions numacts eps]
-  ;; (println "In action-selector with list-of-actions=" list-of-actions)
   (if (> (rand) eps)
-    (let [best (apply max list-of-actions)]
-      (.indexOf list-of-actions best))
+    (let [best (reduce max list-of-actions)
+          posn (myIndexOf list-of-actions best)]
+      ; (print "best = " best " posn = " posn "numacts =" numacts)
+      posn)   ; Previously used .indexOf but that breaks with java data.
     (int (* (rand) numacts))))
 
 (defn mc-select-nth
@@ -108,6 +118,7 @@
 
 (def discrepencies 0)
 (def comparisons 0)
+(def previous-action nil)
 
 (defn select-action
   "Select an action using algorithm selected by --mode."
@@ -186,28 +197,40 @@
          alpha     :alpha
          gamma     :gamma
          ssdi      :discretization
+         ssav      :savestateandaction
          numobs    :numobs
          numacts   :numacts
          statedisc :state-discretizer
-         platform  :platform} learner
+         platform  :platform
+         advice    :ask-gpt} learner
         current-state ((:get-current-state platform) platform numobs)
-        discstate ((:get-discrete-state platform) learner current-state)]
+        discstate ((:get-discrete-state platform) learner current-state)
+        gpt-response ((:get-gpt-response platform) learner)]
     (loop [current-d-state discstate
            donep false
            ereward 0.0
            step 0.0
+           succeeded false
            history ()]
       ;; (println "state = " discstate)
       (if (and (not donep) (not (>= step max-steps)))
-        (let [action (select-action learner current-d-state epsilon)]; Select a action
+        (let [action-proposed (select-action learner current-d-state epsilon) ; Select a action
+              action (advisor/consider-advice-about-action action-proposed previous-action current-d-state)]
+          (if (v4) (println "About to run action " action))
           ((:perform platform) platform action cycletime)
+          (def previous-action action)
+          (if (v4) (println "Action completed"))
+          (when (and ssav (== (mod episode ssav) 0)) (anal/write-csv-data current-d-state action))
           #_(println "platform=" platform "(:plantid platform)=" (:plantid platform))
           (let [new-state ((:get-current-state platform) platform numobs)
                 reward ((:get-field-value platform) platform (:plantid platform) :reward)
                 episode-done ((:get-field-value platform) platform (:plantid platform) :done)
                 new-d-state ((:get-discrete-state platform) learner new-state)]
-            (if (= 0 (mod episode render-every)) ((:render platform) platform)) ;+++
-            ;; (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done "disc.State=" new-d-state)
+            (if (and (not (= render-every 0))
+                     (= 0 (mod episode render-every)))
+              ((:render platform) platform))
+            (if (v4) (println "step=" step "Action=" action "state=" new-state "reward=" reward "done?=" episode-done
+                              "disc.State=" new-d-state "advice=" advice))
             (cond
               (and (not episode-done) (not (>= step max-steps)))
               (let [max-future-q (apply max (qtbl/get-all-actions-quality learner new-d-state))
@@ -224,12 +247,17 @@
                     reward-for-success 0] ;+++ should be maxQ
                 (qtbl/set-action-quality! learner new-d-state action reward-for-success)
                 (def successes (+ 1 successes))
-                (println "*** Success #" successes "on step" step "in" episode "episodes ***")
+                (cond (not episode-of-first-success)
+                      (do (def episode-of-first-success episode)
+                          (if (v1) (println "*** FIRST SUCCESS ACHIEVED ON EPISODE ", episode)))
+                      :otherwise
+                      (if (v1) (println "*** Success #" successes "on step" step "in" episode "episodes ***")))
                 (if (and (or (= mode 3) (= mode 4)) (not (empty? history)))
                   (back-propagation-of-reward reward-for-success learner history))))
             (recur  new-d-state episode-done (+ ereward reward) (+ step 1)
+                    (and episode-done ((:goal-achieved platform) platform new-state reward episode-done))
                     (engrave learner current-d-state action history))))
-        [ereward step]))))
+        [ereward step succeeded]))))
 
 (defn update-statistic-if
   [new test anatom]
@@ -240,62 +268,78 @@
 (defn train
   "Train with a given number of episodes, saving statistics and q-tables at regular intervals."
   [learner]
-  (let [{episodes :episodes
+  (let [runid (.getTime (new java.util.Date))
+        {episodes :episodes
          epsilon  :epsilon
          explore  :explore
          platform :platform
          stats-every :stats-every
          save-every :backup-every
-         q-table  :q-table} learner
+         q-table  :q-table
+         ssav :savestateandaction
+         advice :agpt
+         gpt-response :gpt-response} learner
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))
         decay-by (/ epsilon (- end-eps-decay start-eps-decay))
         maxreward (atom :unset)
         minreward (atom :unset)
-        totalreward (atom 0)
+        totalreward (atom :unset)
+        numsuccesses (atom 0)
         learning-history (atom [])
         processed-episodes (:episodes (deref q-table))
         initial-episode (if (or (not processed-episodes) (= processed-episodes 0))
                           0                          ; Starting a new training
                           processed-episodes)]       ; Continuing from a prior session
+    (advisor/setup-advisors advice gpt-response)
     ;;(pprint learner)
-    (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode)
+    (if (v1) (println "processed-episodes=" processed-episodes "initial-episode=" initial-episode))
     (doseq [episode (range initial-episode episodes)]
       ;; Setup the simulator
+      (when (and ssav (== (mod episode ssav) 0)) (anal/open-csv-file runid "DMQL" episode))
       (let [eps (if (> episode end-eps-decay) 0 (- epsilon (* episode decay-by)))]
         #_(if (= 0 (mod episode 10))
           (println "*** Starting Episode " episode "Epsilon=" eps "Q-table size=" (q-table-size (deref q-table))"\r"))
         ((:reset platform) platform)
         ;; Unneeded (Thread/sleep 10) ;Reset the platform and give it time to settle down
-        (let [[reward steps] (run-episode learner episode eps)]
+        (let [[reward steps succeeded] (run-episode learner episode eps)]
           (if (= 0 (mod episode stats-every))
             (do
               (if (> episode initial-episode)
-                (println (str (java.time.LocalDateTime/now))
+                (if (v1) (println (str (java.time.LocalDateTime/now))
                          "Episode=" episode
                          "Epsilon=" eps
                          "Steps=" steps
+                         "Total successes=" successes
+                         "Successes this batch=" (deref numsuccesses)
                          "Max reward=" (deref maxreward)
                          "Average reward=" (/ (deref totalreward) stats-every)
-                         "Min reward=" (deref minreward)))
+                         "Min reward=" (deref minreward))))
               (reset! learning-history (conj (deref learning-history)
                                              {:episode episode
+                                              :first-success episode-of-first-success
+                                              :stats-every stats-every
+                                              :numsuccesses (deref numsuccesses)
+                                              :total-successes successes
                                               :max-reward (deref maxreward)
                                               :min-reward (deref minreward)
-                                              :average-reward (/ (deref totalreward) stats-every)}))
+                                              :average-reward (if (= (deref totalreward) :unset) :unset (/ (deref totalreward) stats-every))}))
               (if (> episode initial-episode)
-                (println "Saved statistics as: " ; maybe write as CSV file?
-                         (save-statistics (deref learning-history) episode "DMQL")))
+                (if (v1) (println "Saved statistics as: " ; maybe write as CSV file?
+                           (anal/save-statistics (deref learning-history) episode runid "DMQL"))))
               ;; The first result of each set sets the starting values.
+              (reset! numsuccesses (if succeeded 1 0))
               (reset! maxreward reward)
               (reset! minreward reward)
               (reset! totalreward reward))
             (do
               ;;(println "reward=" reward "maxreward=" maxreward "minreward=" minreward)
+              (if succeeded (reset! numsuccesses (+ (deref numsuccesses) 1)))
               (update-statistic-if reward > maxreward)
               (update-statistic-if reward < minreward)
               (reset! totalreward (+ (deref totalreward) reward))))
           (if (and (> episode 0) (= 0 (mod episode save-every)))
-            (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))))))
+            (if (v1) (println "Saved Q Table as: " (qtbl/save-q-table q-table episode "DMQL"))))
+          (when (and ssav (== (mod episode ssav) 0)) (anal/close-csv-file runid "DMQL" episode)))))))
 
 ;;; Fin

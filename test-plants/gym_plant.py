@@ -7,12 +7,20 @@
 # the file LICENSE at the root of this distribution.
 
 import argparse
+import os
 import sys
 import time
+import openai
 from pprint import pprint
-import gym
+import gymnasium as gym
+from openai import OpenAI
 import numpy as np
 import matplotlib.pyplot as plt
+import json
+from dotenv import load_dotenv
+
+# openai.api_key = "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" # DrPaulRobertson@gmail.com key
+# paulr@dollabs.com key ="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"
 
 try:
     import plant
@@ -38,7 +46,9 @@ class Rmq:
     env = None
     gym_reward = 0
     gym_new_state = None
-    gym_done = False
+    gym_done = False            # terminated
+    gym_truncated = False
+    gym_info = None
     gym_goal_position = 0
 
     obs_high = None
@@ -59,18 +69,26 @@ class Rmq:
     state3 = 3
     done = False
 
+    gpt_says = None
+
     def __init__(self, plantid, exchange, host, port):
         self.plant = plant.Plant(plantid, exchange, host, port)
         # self.plant.connection.add_callback_threadsafe(self.rmq_call_back) # Not needed
         self.done = False
         self.last_rmq_call_back = time.time()
 
+    envname = None
+    humanmode = False
+    rendermode = -1
+
     def make_env(self, msg):
         self.plant.started(msg)
-        envname, = msg['args']
-        #print('gym make: ', envname)
-        #self.env=gym.make(envname, render_mode='human')
-        self.env=gym.make(envname) # Until we can figure out how to get the old functionality with the render_more +++
+        self.envname, self.rendermode = msg['args']
+        print('gym make: ', self.envname, 'render-mode = ', self.rendermode)
+        if self.rendermode == -1:
+            self.env=gym.make(self.envname, render_mode='human')
+        else:
+            self.env=gym.make(self.envname)
         self.plant.finished(msg)
         #print('make_env, env=', self.env)
         self.publish_data_obs_rmq()
@@ -79,15 +97,34 @@ class Rmq:
         self.plant.started(msg)
         # no args for reset -- alt, = msg['args']
         if not self.env==None:
+            if (self.rendermode > 0) and self.humanmode:
+                self.env.close()             # Close the rendering
+                self.env = gym.make(self.envname) # Make a new envinonment without rendering
+                self.humanmode = False
             self.gym_new_state=self.env.reset()
             #print('reset') #, alt
             self.publish_state_obs_rmq()
         self.plant.finished(msg)
         #print('done reset')
 
+    def close(self, msg):
+        self.plant.started(msg)
+        # no args for reset -- alt, = msg['args']
+        if not self.env==None:
+            self.env.close()
+            self.env=None
+            self.publish_state_obs_rmq()
+        self.plant.finished(msg)
+        #print('done close')
+
     def render(self, msg):
         self.plant.started(msg)
         # no args for render -- alt, = msg['args']
+        if (self.rendermode > 0) and (self.humanmode == False):
+            self.env.close() # close the existing environment
+            self.env=gym.make(self.envname, render_mode='human')
+            self.humanmode = True
+            self.gym_new_state=self.env.reset()
         self.env.render()
         #print('render') #, alt
         self.plant.finished(msg)
@@ -97,13 +134,27 @@ class Rmq:
         action_name, = msg['args']
         action_number = int(action_name)
         if self.env.action_space.n >= action_number >= 0:
-            self.gym_new_state, self.gym_reward, self.gym_done, _ = self.env.step(action_number)
+            self.gym_new_state, self.gym_reward, self.gym_done, gym_truncated, gym_info  = self.env.step(action_number)
             self.gym_goal_position = 0 #self.env.goal_position
             self.publish_step_obs_rmq()
         else:
             print('Bad action specified:', action_name)
         self.plant.finished(msg)
         #print('done perform_action')
+
+    def ask_gpt(self, msg):
+        prompt, = msg['args']
+        self.gpt_says = get_gpt4_json_response(prompt)
+        if not (gpt_says==None):
+            print(gpt_says) # +++ we need to publish this back to the caller
+        else:
+            print('GPT did not find anything to say in response to ', prompt)
+        self.plant.finished(msg)
+        #print('done ask_gpt action')
+
+    def publish_gpt_obs_rmq(self):
+        obs=[self.plant.make_observation('gpt-response',  self.gpt_says)] if self.gpt_says else []
+        self.plant.observations(None, obs, copy_observations=False, plantid="gym")
 
     def publish_data_obs_rmq(self):
         gym_data_observations = self.make_gym_data_observation()
@@ -149,11 +200,47 @@ class Rmq:
         self.plant.observations(None, gym_state_observations, copy_observations=False, plantid="gym")
 
     def make_state_observation(self):
-        p2=[self.plant.make_observation('state0',  float(self.gym_new_state[0]))] if self.num_obs>0 else []
-        p3=[self.plant.make_observation('state1',  float(self.gym_new_state[1]))] if self.num_obs>1 else []
-        p4=[self.plant.make_observation('state2',  float(self.gym_new_state[2]))] if self.num_obs>2 else []
-        p5=[self.plant.make_observation('state3',  float(self.gym_new_state[3]))] if self.num_obs>3 else []
+        p2=[self.plant.make_observation('state0',  float(self.gym_new_state[0][0]))] if self.num_obs>0 else []
+        p3=[self.plant.make_observation('state1',  float(self.gym_new_state[0][1]))] if self.num_obs>1 else []
+        p4=[self.plant.make_observation('state2',  float(self.gym_new_state[0][2]))] if self.num_obs>2 else []
+        p5=[self.plant.make_observation('state3',  float(self.gym_new_state[0][3]))] if self.num_obs>3 else []
         return p2+p3+p4+p5
+
+############################################
+# OpenAI
+
+    load_dotenv()
+
+    if not os.getenv("OPENAI_API_KEY"):
+        print("WARNING: the OPENAI_API_KEY environment variable was not found")
+
+    def get_gpt4_json_response(prompt):
+        our_messages=[{"role": "system",
+                   "content": "You are a robot and to express your understanding of recommandations by summarizing them as in json form."},
+                  {"role": "system",
+                   "content": "You deliver your responses in json as follows { 'precondition': 'speed=high', 'avoid': 'actuation-changes', 'do': 'misdemeanor' }'"},
+                  {"role": "system",
+                   "content" : "Example: when the speed is high. avoid changing direction { 'precondition': 'speed=high', 'avoid' : 'changing-direction'}"},
+                  {"role": "user",
+                   "content": "REspond to this advice: "+prompt}]
+        openai.api_key = os.getenv("OPENAI_API_KEY")
+
+        response = openai.chat.completions.create(
+            model="gpt-4-1106-preview",
+            messages=our_messages,
+            response_format={"type": "json_object"})
+        print("A total of "+str(response.usage.total_tokens)+" tokens used")
+        if response.choices[0].finish_reason=="stop":
+            result=json.loads(response.choices[0].message.content)
+            return result
+        else:
+            return None
+
+    # startup test
+    pprint(get_gpt4_json_response("I advise you to avoid using the do_nothing action"))
+
+##################################################"
+# Dispatch
 
     def dispatch_func(self, msg, rkey_):
         if 'function-name' in msg:
@@ -180,6 +267,8 @@ class Rmq:
             self.render(msg)
         elif fn_name == 'perform-action':
             self.perform_action(msg)
+        elif fn_name == 'ask-gpt':
+            self.gpt_ask(msg)
         else:
             print('RMQ Unknown function', msg['function-name'])
             self.plant.failed(msg, "Unknown function for cps ros plant" + msg['function-name'])

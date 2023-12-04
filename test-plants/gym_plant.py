@@ -17,7 +17,7 @@ from openai import OpenAI
 import numpy as np
 import matplotlib.pyplot as plt
 import json
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
 # openai.api_key = "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" # DrPaulRobertson@gmail.com key
 # paulr@dollabs.com key ="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"
@@ -209,7 +209,7 @@ class Rmq:
 ############################################
 # OpenAI
 
-    load_dotenv()
+    #load_dotenv()
 
     if not os.getenv("OPENAI_API_KEY"):
         print("WARNING: the OPENAI_API_KEY environment variable was not found")

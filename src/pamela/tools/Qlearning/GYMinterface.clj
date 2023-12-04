@@ -155,7 +155,6 @@
                      (perform self action cycletime))
                    (fn [self] (reset self))                 ; :reset
                    (fn [self] (render self))                ; :render
-                   (fn [self] (ask-gpt self))               ; :gpt interface
                    (cond (= (first world-name) "MountainCar-v0")    ; :goal-achieved
                          goal-achieved-MountainCar-V0
                          ;; Add the other worlds here!
@@ -168,7 +167,9 @@
                    (fn [self obj field val] ; :set-field-value
                      (DPL/updatefieldvalue obj field val))
                    (fn [self numobs]    ; :get-current-state
-                     (get-current-state numobs)))]
+                     (get-current-state numobs))
+                   (fn [self] (ask-gpt self))               ; :gpt interface
+                   )]
     interface))
 
 ;;; Fin

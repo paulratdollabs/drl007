@@ -203,9 +203,10 @@
          statedisc :state-discretizer
          platform  :platform
          advice    :ask-gpt} learner
-        current-state ((:get-current-state platform) platform numobs)
-        discstate ((:get-discrete-state platform) learner current-state)
-        gpt-response ((:get-gpt-response platform) learner)]
+         current-state ((:get-current-state platform) platform numobs)
+         discstate ((:get-discrete-state platform) learner current-state)
+         ;; gpt-response ((:get-gpt-response platform) learner)
+        ]
     (loop [current-d-state discstate
            donep false
            ereward 0.0

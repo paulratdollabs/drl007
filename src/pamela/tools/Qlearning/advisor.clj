@@ -88,10 +88,12 @@
 
 (defn setup-advisors
   [advice gpt-response]
-  (when (and advice gpt-response)
+  (println "advice=" advice "gpt-response=" gpt-response)
+  (if (and advice gpt-response)
     (let [advisor1 (make-advice advice gpt-response, advisor1-precondition advisor1-action)]
-      (if (v1) (println "Installing advice: " advice))
-      (register-advice advisor1))))
+      (when (v1) (println "Installing advice: " advice))
+      (register-advice advisor1))
+    (println "No advice installed")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; GPT interface

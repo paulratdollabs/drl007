@@ -205,7 +205,7 @@
          advice    :ask-gpt} learner
          current-state ((:get-current-state platform) platform numobs)
          discstate ((:get-discrete-state platform) learner current-state)
-         ;; gpt-response ((:get-gpt-response platform) learner)
+         ;;gpt-response ((:get-gpt-response platform) learner)
         ]
     (loop [current-d-state discstate
            donep false
@@ -278,7 +278,7 @@
          save-every :backup-every
          q-table  :q-table
          ssav :savestateandaction
-         advice :agpt
+         advice :ask-gpt
          gpt-response :gpt-response} learner
         start-eps-decay 1
         end-eps-decay (int (* episodes explore))

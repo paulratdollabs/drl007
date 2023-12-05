@@ -55,8 +55,8 @@
 
 ;; reset the simulator for the next episode
 (defn ask-gpt
-  [self]
-  (DPL/bp-call self "gym" "ask-gpt" []))
+  [self prompt]
+  (DPL/bp-call self "gym" "ask-gpt" [prompt]))
 
 ;;; shutdown the simulator - NYI
 (defn shutdown
@@ -168,7 +168,7 @@
                      (DPL/updatefieldvalue obj field val))
                    (fn [self numobs]    ; :get-current-state
                      (get-current-state numobs))
-                   (fn [self] (ask-gpt self))               ; :gpt interface
+                   (fn [self prompt] (ask-gpt self prompt))               ; :gpt interface
                    )]
     interface))
 

@@ -203,8 +203,8 @@
               ;; (gym/print-field-values)
               (let [numobs  (DPL/get-field-value :gym :numobs)
                     numacts (DPL/get-field-value :gym :numacts)
-                    gpt-response  (DPL/get-field-value :gym :ask-gpt)]
-                (if gpt-response (println "gpt responded with - " str(gpt-response)))
+                    gpt-response  (DPL/get-field-value :gym :gpt-response)]
+                (if gpt-response (println "gpt responded with - " (str gpt-response)))
                 #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                 (let [initial-q-table
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?

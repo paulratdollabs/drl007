@@ -142,11 +142,11 @@ class Rmq:
         self.plant.finished(msg)
         #print('done perform_action')
 
-    def ask_gpt(self, msg):
+    def gpt_ask(self, msg):
         prompt, = msg['args']
-        self.gpt_says = get_gpt4_json_response(prompt)
-        if not (gpt_says==None):
-            print(gpt_says) # +++ we need to publish this back to the caller
+        self.gpt_says = self.get_gpt4_json_response(prompt)
+        if not (self.gpt_says==None):
+            print(self.gpt_says) # +++ we need to publish this back to the caller
         else:
             print('GPT did not find anything to say in response to ', prompt)
         self.publish_gpt_obs_rmq()
@@ -215,7 +215,7 @@ class Rmq:
     if not os.getenv("OPENAI_API_KEY"):
         print("WARNING: the OPENAI_API_KEY environment variable was not found")
 
-    def get_gpt4_json_response(prompt):
+    def get_gpt4_json_response(self, prompt):
         our_messages=[{"role": "system",
                    "content": "You are a robot and to express your understanding of recommandations by summarizing them as in json form."},
                   {"role": "system",

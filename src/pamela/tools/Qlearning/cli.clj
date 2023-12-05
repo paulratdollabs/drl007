@@ -190,11 +190,13 @@
             ;; Start the learner!
             (let [_ (println (format "*** Starting the Q learner with %s (%d episodes, mode=%d, epsilon=%f explore=%f) ***%n"
                                      gwld neps mode epsi expl))
+                  _ (if agpt (println "Advice given - " agpt))
                   gym-if  (gym/make-gym-interface (list gwld) "dmrl" rmq-channel exchange :gym rend)]
               ;; Monitors for debugging, put -v 1 in the command line to see them.
-              (DPL/monitor-field :gym  :reward)
-              (DPL/monitor-field :gym  :done)
-              (DPL/print-monitors)
+              ((:ask-gpt gym-if) gym-if agpt)
+              #(DPL/monitor-field :gym  :reward)
+              #(DPL/monitor-field :gym  :done)
+              #(DPL/print-monitors)
 
               ((:initialize-world gym-if) gym-if) ; Startup the simulator
               (Thread/sleep 100) ; Wait one second to allow simulator to start up and publish data
@@ -202,6 +204,7 @@
               (let [numobs  (DPL/get-field-value :gym :numobs)
                     numacts (DPL/get-field-value :gym :numacts)
                     gpt-response  (DPL/get-field-value :gym :ask-gpt)]
+                (if gpt-response (println "gpt responded with - " str(gpt-response)))
                 #_(println (format "*** Observation Dimension=%d Actions=%d" numobs numacts))
                 (let [initial-q-table
                       (if loaq ; +++ maybe check (.exists (clojure.java.io/as-file loaq) ?

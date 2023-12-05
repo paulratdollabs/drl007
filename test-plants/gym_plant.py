@@ -149,6 +149,7 @@ class Rmq:
             print(gpt_says) # +++ we need to publish this back to the caller
         else:
             print('GPT did not find anything to say in response to ', prompt)
+        self.publish_gpt_obs_rmq()
         self.plant.finished(msg)
         #print('done ask_gpt action')
 
@@ -237,7 +238,7 @@ class Rmq:
             return None
 
     # startup test
-    pprint(get_gpt4_json_response("I advise you to avoid using the do_nothing action"))
+    # pprint(get_gpt4_json_response("I advise you to avoid using the do_nothing action"))
 
 ##################################################"
 # Dispatch

@@ -49,7 +49,10 @@
     fn))
 
 (def adirpath "/Volumes/paul/DataForNDIST23/")
-(def qtable-example ["DMQL9000-q-table"])
+(def adirpath-a "/Users/paulr/Dropbox/DataForNDIST23/WithAdvice-MC-DMRL/Q-tables/")
+
+(def qtable-example ["DMQL9000-q-table"])  ; unassisted
+(def qtable-example2 ["DMQL2500-q-table"]) ; assisted
 
 (def data-example
   ["1701040169369-DMQL-learning-statistics"
@@ -128,6 +131,7 @@
       (fromjson/to-file xlated out-fn))))
 
 ;;; (convert-q-table-to-json-for-scatterplot adirpath qtable-example)
+;;; (convert-q-table-to-json-for-scatterplot adirpath-a qtable-example2)
 
 ;;; CVS state and action data
 

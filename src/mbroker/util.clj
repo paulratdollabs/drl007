@@ -3,7 +3,6 @@
 
 (ns mbroker.util
   (:require [mbroker.rabbitmq :as q]
-            [tpn.fromjson]
             [langohr.basic :as lb]
             [clojure.pprint :refer :all]
             [clojure.data.json :as json]))
@@ -35,7 +34,12 @@
 (defn send-msg [clj-data & exch]
   (send-msg-str (json/write-str clj-data) exch))
 
-(defn payload-to-json [payload]
+#_(defn map-from-json-str [content]
+  (json/read-str content
+                 :key-fn #(keyword %)
+                 :value-fn val-converter))
+
+#_(defn payload-to-json [payload]
   (let [data (String. payload "UTF-8")
-        js (tpn.fromjson/map-from-json-str data)]
+        js (map-from-json-str data)]
     js))

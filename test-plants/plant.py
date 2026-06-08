@@ -60,7 +60,7 @@ class Plant:
         self.done = False
         if plantid is not None:
             self.channel.queue_bind(queue=self.qname, exchange=exchange, routing_key=plantid)
-        print('Plant instance created by thread:', self.channel_thread.getName())
+        print('Plant instance created by thread:', self.channel_thread.name)
 
     def myprint(self):
         print("plantid: " + str(self.plantid) + ", exchange: " + str(self.exchange) +
@@ -86,7 +86,7 @@ class Plant:
         except pika.exceptions.ConnectionClosed:
             print('Received pika.exceptions.ConnectionClosed')
         # except Exception as e:
-       #     print( 'plant.py wait_until_keyboard_interrupt \nThis happens when closing RMQ connections\n',e.__class__.__name__ + ": " + e.message)
+        #     print( 'plant.py wait_until_keyboard_interrupt \nThis happens when closing RMQ connections\n',e.__class__.__name__ + ": " + e.message)
         # print( 'plant.py done ')
 
     def message_receiver_internal(self, channel, method, properties, body):
@@ -184,7 +184,7 @@ class Plant:
         self.__enque_to_rmq(self.exchange, self.routing_key, json.dumps(msg))
 
     def binary_publish(self, routing_key, data):
-       # print( 'publishing data of len {}'.format(len(data)))
+        # print( 'publishing data of len {}'.format(len(data)))
         properties = pika.BasicProperties(content_type='application/x-binary')
         self.__enque_to_rmq(self.exchange, routing_key, data, properties)
         # print( '---- done my generic_publish\n')
@@ -211,10 +211,10 @@ class Plant:
     def __basic_publish(self, exchange, routing_key, data, properties=None):
         th = threading.current_thread()
 
-        if th.ident != self.channel_thread.ident or th.getName() != self.channel_thread.getName():
-           print( 'WARN: ', 'discrepancy in plant create thread and outgoing thread sending the outgoing message')
-            print( 'current thread', th.ident, th.getName())
-            print( 'channel thread', self.channel_thread.ident, self.channel_thread.getName())
+       if th.ident != self.channel_thread.ident or th.name != self.channel_thread.name:
+            print( 'WARN: ', 'discrepancy in plant create thread and outgoing thread sending the outgoing message')
+            print( 'current thread', th.ident, th.name)
+            print( 'channel thread', self.channel_thread.ident, self.channel_thread.name)
 
         if properties is None:
             self.channel.basic_publish(exchange, routing_key, data)

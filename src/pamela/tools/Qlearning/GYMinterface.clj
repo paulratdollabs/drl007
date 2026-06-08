@@ -21,7 +21,6 @@
             [langohr.queue :as lq]
             [langohr.consumers :as lc]
             [langohr.channel :as lch]
-            [tpn.fromjson :as fromjson]
             [pamela.tools.Qlearning.DPLinterface :as DPL])
   (:import [pamela.tools.Qlearning.DPLinterface dplinterface])
   (:gen-class))
@@ -35,8 +34,8 @@
 
 ;;; Initialize the plant (robot or simulator)
 (defn initialize-simulator
-  [self gym-world]
-  (DPL/bp-call self "gym" "make_env" [gym-world]))
+  [self gym-world rendermode]
+  (DPL/bp-call self "gym" "make_env" [gym-world rendermode]))
 
 ;;; Invoke the action
 (defn perform
@@ -53,6 +52,11 @@
 (defn render
   [self]
   (DPL/bp-call self "gym" "render" []))
+
+;; reset the simulator for the next episode
+(defn ask-gpt
+  [self prompt]
+  (DPL/bp-call self "gym" "ask-gpt" [prompt]))
 
 ;;; shutdown the simulator - NYI
 (defn shutdown
@@ -93,6 +97,13 @@
     (do (println (format "Wrong number of observations (%d), must be between 1 and 4." numobs))
         (System/exit 0))))
 
+(defn get-gpt-response
+  [numobs]
+  (case numobs
+    1 [(DPL/get-field-value :gym :ask-gpt)]
+    (do (println (format "Wrong number of observations (%d), must be 1." numobs))
+        (System/exit 0))))
+
 (defn goal-achieved-generic                     ; Open to decide differently
   [self state reward done]
   (and done (>= reward 0)))   #_(> (first state) (DPL/get-field-value :gym :goal_position))
@@ -129,7 +140,7 @@
       discstate)))
 
 (defn make-gym-interface
-  [world-name routing channel exchange plantid]
+  [world-name routing channel exchange plantid rend]
   (let [interface (dplinterface.        ; dpl/make-dpl-interface
                    world-name           ; :world-parameters
                    routing              ; :routing
@@ -138,7 +149,7 @@
                    plantid              ; :plantid
                    (fn [self]           ; :initialize-world
                      (initialize-simulator
-                      self (first (:world-parameters self))))
+                      self (first (:world-parameters self)) rend))
                    (fn [self] (shutdown self))              ; :shutdown
                    (fn [self action cycletime]              ; :perform
                      (perform self action cycletime))
@@ -156,7 +167,9 @@
                    (fn [self obj field val] ; :set-field-value
                      (DPL/updatefieldvalue obj field val))
                    (fn [self numobs]    ; :get-current-state
-                     (get-current-state numobs)))]
+                     (get-current-state numobs))
+                   (fn [self prompt] (ask-gpt self prompt))               ; :gpt interface
+                   )]
     interface))
 
 ;;; Fin
